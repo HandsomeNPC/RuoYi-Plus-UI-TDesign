@@ -8,6 +8,11 @@
         >
       </template>
 
+      <t-tabs v-model="activeTab" class="config-tabs" @change="handleTabChange">
+        <t-tab-panel label="全部" value="all" />
+        <t-tab-panel label="自定义" value="custom" />
+      </t-tabs>
+
       <t-form :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="参数名称" name="configName"
           ><t-input v-model="queryParams.configName" clearable placeholder="请输入参数名称"
@@ -65,6 +70,16 @@
         @page-change="onPageChange"
       >
         <template #configType="{ row }"><dict-tag :options="sys_yes_no" :value="row.configType" /></template>
+        <template #configValue="{ row }">
+          <t-input
+            v-if="row.configType === 'N'"
+            v-model="row.configValue"
+            borderless
+            @blur="handleInlineSave(row)"
+            @enter="handleInlineSave(row)"
+          />
+          <span v-else>{{ row.configValue }}</span>
+        </template>
         <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
         <template #operation="{ row }">
           <t-space size="small">
@@ -114,7 +129,7 @@ import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } 
 import { computed, reactive, ref } from 'vue';
 
 import type { ConfigForm, ConfigQuery, ConfigVO } from '@/api/system/config/types';
-import { addConfig, delConfig, listConfig, refreshCache, updateConfig } from '@/api/system/config';
+import { addConfig, delConfig, listConfig, refreshCache, updateConfig, updateConfigByKey } from '@/api/system/config';
 import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
 import { parseTime } from '@/utils/ruoyi';
@@ -129,6 +144,13 @@ const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<ConfigVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+
+// 全部 / 自定义 配置 Tab：自定义仅显示非系统内置（configType='N'），可直接行内编辑
+const activeTab = ref('all');
+const handleTabChange = (val: string | number) => {
+  queryParams.configType = val === 'custom' ? 'N' : '';
+  handleQuery();
+};
 
 const queryParams = reactive<ConfigQuery>({ pageNum: 1, pageSize: 10, configName: '', configKey: '', configType: '' });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
@@ -175,13 +197,23 @@ const handleQuery = () => {
 const resetQuery = () => {
   queryParams.configName = '';
   queryParams.configKey = '';
-  queryParams.configType = '';
+  queryParams.configType = activeTab.value === 'custom' ? 'N' : '';
   handleQuery();
 };
 const handleExport = () => download('/system/config/export', { ...queryParams }, `config_${Date.now()}.xlsx`);
 const handleRefreshCache = async () => {
   await refreshCache();
   MessagePlugin.success('刷新缓存成功');
+};
+// 行内保存：非内置参数直接编辑 configValue，失焦/回车即调用 updateConfigByKey
+const handleInlineSave = async (row: ConfigVO) => {
+  try {
+    await updateConfigByKey(row.configKey, row.configValue ?? '');
+    MessagePlugin.success('修改成功');
+  } catch {
+    // 失败时重新加载还原
+    getList();
+  }
 };
 
 const formRef = ref<FormInstanceFunctions>();

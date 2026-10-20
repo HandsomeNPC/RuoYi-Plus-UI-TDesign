@@ -215,6 +215,16 @@ export const tansParams = (params: any) => {
   return result;
 };
 
+// 验证字符串是否为外链（http(s)/mailto/tel）
+export const isExternal = (path: string): boolean => {
+  return /^(https?:|mailto:|tel:)/.test(path);
+};
+
+// 验证是否为 http(s) 链接
+export const isHttp = (url: string): boolean => {
+  return /^http(s)?:\/\//.test(url);
+};
+
 // 返回项目路径
 export const getNormalPath = (p: string): string => {
   if (p.length === 0 || !p || p === 'undefined') {

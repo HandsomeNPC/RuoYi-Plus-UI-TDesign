@@ -89,7 +89,7 @@
     >
       <t-form ref="formRef" :data="form" :rules="rules" label-width="100px" @submit="onSubmit">
         <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="上级菜单" name="parentId">
               <t-tree-select
                 v-model="form.parentId"
@@ -101,7 +101,7 @@
               />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="菜单类型" name="menuType">
               <t-radio-group v-model="form.menuType">
                 <t-radio value="M">目录</t-radio>
@@ -112,12 +112,12 @@
           </t-col>
         </t-row>
         <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="菜单名称" name="menuName">
               <t-input v-model="form.menuName" placeholder="请输入菜单名称" />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="显示排序" name="orderNum">
               <t-input-number v-model="form.orderNum" :min="0" />
             </t-form-item>
@@ -129,12 +129,12 @@
         </t-form-item>
 
         <t-row v-if="form.menuType !== 'F'">
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="路由地址" name="path">
               <t-input v-model="form.path" placeholder="请输入路由地址" />
             </t-form-item>
           </t-col>
-          <t-col v-if="form.menuType === 'C'" :span="12">
+          <t-col v-if="form.menuType === 'C'" :span="6">
             <t-form-item label="组件路径" name="component">
               <t-input v-model="form.component" placeholder="如 system/user/index" />
             </t-form-item>
@@ -142,12 +142,12 @@
         </t-row>
 
         <t-row v-if="form.menuType !== 'M'">
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="权限标识" name="perms">
               <t-input v-model="form.perms" placeholder="如 system:user:list" />
             </t-form-item>
           </t-col>
-          <t-col v-if="form.menuType === 'C'" :span="12">
+          <t-col v-if="form.menuType === 'C'" :span="6">
             <t-form-item label="路由参数" name="queryParam">
               <t-input v-model="form.queryParam" placeholder='如 {"id": 1}' />
             </t-form-item>
@@ -155,12 +155,12 @@
         </t-row>
 
         <t-row v-if="form.menuType !== 'F'">
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="是否外链" name="isFrame">
               <dict-select v-model="form.isFrame" placeholder="请选择" type="sys_yes_no" />
             </t-form-item>
           </t-col>
-          <t-col v-if="form.menuType === 'C'" :span="12">
+          <t-col v-if="form.menuType === 'C'" :span="6">
             <t-form-item label="是否缓存" name="isCache">
               <t-radio-group v-model="form.isCache">
                 <t-radio value="Y">缓存</t-radio>
@@ -171,12 +171,12 @@
         </t-row>
 
         <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="显示状态" name="visible">
               <dict-select v-model="form.visible" placeholder="请选择" type="sys_show_hide" />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="菜单状态" name="status">
               <dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" />
             </t-form-item>
@@ -184,7 +184,7 @@
         </t-row>
 
         <t-row v-if="form.visible !== '0'">
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="激活路由" name="activeMenu">
               <t-input v-model="form.activeMenu" placeholder="如 /system/user" />
             </t-form-item>

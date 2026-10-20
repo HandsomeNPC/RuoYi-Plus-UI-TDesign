@@ -136,6 +136,10 @@
             <template #icon><add-icon /></template>
             新增
           </t-button>
+          <t-button v-hasPermi="['system:dict:export']" theme="warning" variant="outline" @click="handleDataExport">
+            <template #icon><download-icon /></template>
+            导出
+          </t-button>
         </div>
 
         <t-table
@@ -187,6 +191,9 @@
           <t-select v-model="dataForm.listClass" clearable placeholder="请选择">
             <t-option v-for="o in tagOptions" :key="o.value" :label="o.label" :value="o.value" />
           </t-select>
+        </t-form-item>
+        <t-form-item label="CSS Class" name="cssClass">
+          <t-input v-model="dataForm.cssClass" placeholder="请输入 CSS Class" />
         </t-form-item>
         <t-form-item label="备注" name="remark">
           <t-textarea v-model="dataForm.remark" :autosize="{ minRows: 2 }" placeholder="请输入备注" />
@@ -532,6 +539,15 @@ const handleDataDelete = async (row: DictDataVO) => {
   await delData(row.dictCode);
   MessagePlugin.success('删除成功');
   getDataList();
+};
+
+const handleDataExport = () => {
+  if (!currentType.value) return;
+  download(
+    '/system/dict/data/export',
+    { ...dataQueryParams, dictType: currentType.value.dictType },
+    `dict_data_${new Date().getTime()}.xlsx`,
+  );
 };
 
 // 初始化

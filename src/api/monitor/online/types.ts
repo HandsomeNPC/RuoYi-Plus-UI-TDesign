@@ -7,6 +7,8 @@ export interface OnlineVO extends BaseEntity {
   tokenId: string;
   deptName: string;
   userName: string;
+  clientKey: string;
+  deviceType: string;
   ipaddr: string;
   loginLocation: string;
   browser: string;

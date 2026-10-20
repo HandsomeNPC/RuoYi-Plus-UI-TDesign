@@ -150,11 +150,11 @@ const handleLogout = async () => {
 };
 
 const navToGitHub = () => {
-  window.open('https://github.com/tencent/tdesign-vue-next-starter');
+  window.open('https://gitee.com/JavaLionLi/RuoYi-Vue-Plus');
 };
 
 const navToHelper = () => {
-  window.open('https://tdesign.tencent.com/starter/docs/vue-next/get-started');
+  window.open('https://plus-doc.dromara.org/');
 };
 </script>
 <style lang="less" scoped>

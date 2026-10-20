@@ -5,7 +5,9 @@ import type { RouteRecordRaw } from 'vue-router';
 import { getRouters } from '@/api/menu';
 import router from '@/router';
 import { store } from '@/store';
+import { createCustomNameComponent } from '@/utils/createCustomNameComponent';
 import { LAYOUT } from '@/utils/route/constant';
+import { isHttp } from '@/utils/ruoyi';
 
 // 后端菜单组件串 → 前端组件 映射
 const ParentView = () => import('@/components/ParentView/index.vue');
@@ -15,11 +17,16 @@ const EXCEPTION_COMPONENT = () => import('@/pages/result/500/index.vue');
 // 预建 pages 下所有 .vue 查找表，避免每次扫描
 const modules = import.meta.glob('./../../pages/**/*.vue');
 const viewModuleMap = new Map<string, () => Promise<any>>();
+// 大小写不敏感查找表：后端 component 串大小写可能与文件目录不完全一致
+// （例如 monitor/logininfo/index 与目录 loginInfo），用小写键兜底
+const viewModuleMapLower = new Map<string, () => Promise<any>>();
 for (const path of Object.keys(modules)) {
   const idx = path.indexOf('/pages/');
   if (idx === -1) continue;
   const dir = path.substring(idx + 7, path.lastIndexOf('.vue'));
-  viewModuleMap.set(dir, modules[path] as () => Promise<any>);
+  const loader = modules[path] as () => Promise<any>;
+  viewModuleMap.set(dir, loader);
+  viewModuleMapLower.set(dir.toLowerCase(), loader);
 }
 
 function toLocalizedTitle(title: any) {
@@ -28,9 +35,23 @@ function toLocalizedTitle(title: any) {
   return title;
 }
 
-function loadView(view: string) {
-  const loader = viewModuleMap.get(view) || viewModuleMap.get(view.replace(/^\//, ''));
-  return loader || EXCEPTION_COMPONENT;
+function loadView(view: string, name?: string) {
+  const v = view.replace(/^\//, '');
+  // 1. 精确匹配
+  // 2. 后端串不带 /index 时尝试补 /index
+  // 3. 大小写不敏感（精确 + /index）
+  // 兜底返回 500 异常组件
+  const loader =
+    viewModuleMap.get(v) ||
+    viewModuleMap.get(`${v}/index`) ||
+    viewModuleMapLower.get(v.toLowerCase()) ||
+    viewModuleMapLower.get(`${v.toLowerCase()}/index`);
+  if (!loader) return EXCEPTION_COMPONENT;
+  // 用路由 name 包一层组件，使 <keep-alive :include> 能命中后端生成的 name
+  if (name) {
+    return createCustomNameComponent(loader, { name });
+  }
+  return loader;
 }
 
 /**
@@ -44,13 +65,22 @@ function processRoute(route: any, isTop: boolean) {
   if (!route.meta) route.meta = {};
   route.meta.title = toLocalizedTitle(route.meta.title);
 
-  // RuoYi 菜单 visible/status → starter 侧边栏 hidden
-  // visible: '0' 显示 / '1' 隐藏（动态打开的路由，如分配角色，不应出现在菜单）
-  // status:  '0' 正常 / '1' 停用（停用菜单不展示）
-  const visible = route.meta.visible;
-  const status = route.meta.status;
+  // RuoYi-Plus 后端 RouterVo.hidden 是顶层布尔字段（router.setHidden("1".equals(menu.getVisible()))），
+  // meta 里只有 title/icon/noCache/link/activeMenu，没有 visible/status。
+  // 这里把顶层 hidden 同步到 starter 侧边栏识别的 meta.hidden。
+  if (route.hidden === true || route.hidden === '1') {
+    route.meta.hidden = true;
+  }
+  // 兜底：个别后端版本仍把 visible/status 放在 meta 里
+  const { visible, status } = route.meta;
   if (visible === '1' || visible === 1 || status === '1' || status === 1) {
     route.meta.hidden = true;
+  }
+
+  // RuoYi 用 meta.noCache 控制不缓存；starter Content.vue 用 meta.keepAlive（未定义=缓存）。
+  // 把 noCache 映射成 keepAlive=false。
+  if (route.meta.noCache === true || route.meta.noCache === 'true') {
+    route.meta.keepAlive = false;
   }
 
   const comp = route.component?.toString();
@@ -61,11 +91,12 @@ function processRoute(route: any, isTop: boolean) {
   } else if (comp === 'InnerLink') {
     route.component = InnerLink;
   } else if (route.component) {
-    route.component = loadView(route.component);
+    route.component = loadView(route.component, route.name);
   }
 
-  // 顶层 path 补前导斜杠，便于 starter 侧边栏直接拼接
-  if (isTop && route.path && !String(route.path).startsWith('/')) {
+  // 顶层 path 补前导斜杠，便于 starter 侧边栏直接拼接；
+  // 外链（http(s)://）path 不能补斜杠，否则变成 /https://...
+  if (isTop && route.path && !String(route.path).startsWith('/') && !isHttp(String(route.path))) {
     route.path = '/' + route.path;
   }
 

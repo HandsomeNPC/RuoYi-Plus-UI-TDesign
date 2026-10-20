@@ -46,6 +46,9 @@
             ><template #icon><delete-icon /></template>删除</t-button
           >
         </t-popconfirm>
+        <t-button v-hasPermi="['system:client:export']" theme="warning" variant="outline" @click="handleExport"
+          ><template #icon><download-icon /></template>导出</t-button
+        >
       </div>
 
       <t-table
@@ -91,17 +94,17 @@
     >
       <t-form ref="formRef" :data="form" :rules="rules" label-width="120px" @submit="onSubmit">
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="客户端key" name="clientKey"
               ><t-input v-model="form.clientKey" placeholder="请输入客户端key" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="客户端秘钥" name="clientSecret"
               ><t-input v-model="form.clientSecret" placeholder="请输入客户端秘钥" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="授权类型" name="grantTypeList"
               ><dict-select
                 v-model="form.grantTypeList"
@@ -109,21 +112,30 @@
                 placeholder="请选择"
                 type="sys_grant_type" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="设备类型" name="deviceType"
               ><dict-select v-model="form.deviceType" placeholder="请选择" type="sys_device_type" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="活跃超时(s)" name="activeTimeout"
               ><t-input-number v-model="form.activeTimeout" :min="0" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="固定超时(s)" name="timeout"
               ><t-input-number v-model="form.timeout" :min="0" /></t-form-item
           ></t-col>
         </t-row>
+        <t-form-item label="白名单路径" name="accessPath"
+          ><t-textarea v-model="form.accessPath" :autosize="{ minRows: 3 }" placeholder="多个用换行分隔，示例：/app/**"
+        /></t-form-item>
+        <t-form-item label="白名单IP" name="ipWhitelist"
+          ><t-textarea
+            v-model="form.ipWhitelist"
+            :autosize="{ minRows: 3 }"
+            placeholder="多个用换行分隔，示例：192.168.1.1"
+        /></t-form-item>
         <t-form-item label="状态" name="status"
           ><dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable"
         /></t-form-item>
@@ -138,11 +150,12 @@
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { AddIcon, DeleteIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { computed, reactive, ref } from 'vue';
 
 import type { ClientForm, ClientQuery, ClientVO } from '@/api/system/client/types';
 import { addClient, changeStatus, delClient, listClient, updateClient } from '@/api/system/client';
+import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
 
 defineOptions({ name: 'SystemClient' });
@@ -231,6 +244,8 @@ const initForm = (): ClientForm => ({
   clientSecret: '',
   grantTypeList: [],
   deviceType: '',
+  accessPath: '',
+  ipWhitelist: '',
   activeTimeout: 1800,
   timeout: 604800,
   status: '0',
@@ -257,6 +272,8 @@ const handleUpdate = (row?: ClientVO) => {
     clientSecret: t.clientSecret,
     grantTypeList: t.grantTypeList ?? [],
     deviceType: t.deviceType,
+    accessPath: t.accessPath ?? '',
+    ipWhitelist: t.ipWhitelist ?? '',
     activeTimeout: t.activeTimeout,
     timeout: t.timeout,
     status: t.status,
@@ -291,6 +308,8 @@ const handleDelete = async (row?: ClientVO) => {
   selectedRows.value = [];
   getList();
 };
+
+const handleExport = () => download('/system/client/export', { ...queryParams }, `client_${Date.now()}.xlsx`);
 
 getList();
 </script>

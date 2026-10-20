@@ -47,6 +47,7 @@
         @page-change="onPageChange"
       >
         <template #loginTime="{ row }">{{ parseTime(row.loginTime) }}</template>
+        <template #deviceType="{ row }"><dict-tag :options="sys_device_type" :value="row.deviceType" /></template>
         <template #operation="{ row }">
           <t-popconfirm content="是否强退该用户?" @confirm="handleForceLogout(row)">
             <t-link v-hasPermi="['monitor:online:forceLogout']" hover="color" theme="danger">强退</t-link>
@@ -65,9 +66,12 @@ import { reactive, ref } from 'vue';
 
 import type { OnlineQuery, OnlineVO } from '@/api/monitor/online/types';
 import { forceLogout, list } from '@/api/monitor/online';
+import { useDict } from '@/utils/dict';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'MonitorOnline' });
+
+const { sys_device_type } = useDict('sys_device_type');
 
 const listData = ref<OnlineVO[]>([]);
 const loading = ref(false);
@@ -84,6 +88,8 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'deptName', title: '部门名称', width: 160 },
   { colKey: 'ipaddr', title: '主机', width: 160 },
   { colKey: 'loginLocation', title: '登录地点', width: 160 },
+  { colKey: 'clientKey', title: '客户端', width: 110, ellipsis: true },
+  { colKey: 'deviceType', title: '设备类型', width: 110, align: 'center' },
   { colKey: 'browser', title: '浏览器', width: 140 },
   { colKey: 'os', title: '操作系统', width: 160 },
   { colKey: 'loginTime', title: '登录时间', width: 180 },

@@ -2,7 +2,7 @@
   <div class="user-page">
     <t-row :gutter="12">
       <!-- 左侧部门树 -->
-      <t-col :lg="5" :xs="24">
+      <t-col :lg="3" :xs="12">
         <t-card :bordered="false" class="dept-card">
           <template #title><div class="card-title">部门</div></template>
           <div class="dept-search">
@@ -24,13 +24,16 @@
       </t-col>
 
       <!-- 右侧用户列表 -->
-      <t-col :lg="19" :xs="24">
+      <t-col :lg="9" :xs="12">
         <t-card :bordered="false">
           <template #title><div class="card-title">用户管理</div></template>
 
           <t-form :data="queryParams" layout="inline" @submit="handleQuery">
             <t-form-item label="用户名称" name="userName"
               ><t-input v-model="queryParams.userName" clearable placeholder="请输入用户名称"
+            /></t-form-item>
+            <t-form-item label="用户昵称" name="nickName"
+              ><t-input v-model="queryParams.nickName" clearable placeholder="请输入用户昵称"
             /></t-form-item>
             <t-form-item label="手机号码" name="phoneNumber"
               ><t-input v-model="queryParams.phoneNumber" clearable placeholder="请输入手机号码"
@@ -42,6 +45,14 @@
                 style="width: 150px"
                 type="sys_normal_disable"
             /></t-form-item>
+            <t-form-item label="创建时间" name="dateRange">
+              <t-date-range-picker
+                v-model="dateRange"
+                clearable
+                style="width: 280px"
+                value-type="YYYY-MM-DD HH:mm:ss"
+              />
+            </t-form-item>
             <t-form-item :style="{ marginLeft: 'auto' }">
               <t-space>
                 <t-button theme="primary" type="submit"
@@ -90,7 +101,7 @@
           >
             <template #status="{ row }">
               <t-switch
-                :disabled="row.userId === 1 || row.admin"
+                :disabled="isSuperAdmin(row.userId)"
                 :value="row.status === '0'"
                 @change="(v: any) => handleStatusChange(row, v)"
               />
@@ -105,7 +116,15 @@
                   >修改</t-link
                 >
                 <t-link
-                  v-if="row.userId !== 1"
+                  v-if="!isSuperAdmin(row.userId)"
+                  v-hasPermi="['system:user:edit']"
+                  hover="color"
+                  theme="primary"
+                  @click="handleAuthRole(row)"
+                  >分配角色</t-link
+                >
+                <t-link
+                  v-if="!isSuperAdmin(row.userId)"
                   v-hasPermi="['system:user:resetPwd']"
                   hover="color"
                   theme="primary"
@@ -132,7 +151,7 @@
     >
       <t-form ref="formRef" :data="form" :rules="rules" label-width="100px" @submit="onSubmit">
         <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="归属部门" name="deptId">
               <t-tree-select
                 v-model="form.deptId"
@@ -144,44 +163,44 @@
               />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="昵称" name="nickName"
               ><t-input v-model="form.nickName" placeholder="请输入昵称"
             /></t-form-item>
           </t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="用户名称" name="userName"
               ><t-input v-model="form.userName" :disabled="!!form.userId" placeholder="请输入用户名称" /></t-form-item
           ></t-col>
-          <t-col v-if="!form.userId" :span="12"
+          <t-col v-if="!form.userId" :span="6"
             ><t-form-item label="密码" name="password"
               ><t-input v-model="form.password" placeholder="请输入密码" type="password" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="手机号码" name="phoneNumber"
               ><t-input v-model="form.phoneNumber" placeholder="请输入手机号码" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="邮箱" name="email"
               ><t-input v-model="form.email" placeholder="请输入邮箱" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="性别" name="gender"
-              ><dict-select v-model="form.gender" placeholder="请选择" type="sys_user_sex" /></t-form-item
+              ><dict-select v-model="form.gender" placeholder="请选择" type="sys_user_gender" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="状态" name="status"
               ><dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="岗位" name="postIds"
               ><t-select
                 v-model="form.postIds"
@@ -191,7 +210,7 @@
                 multiple
                 placeholder="请选择岗位" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="角色" name="roleIds"
               ><t-select
                 v-model="form.roleIds"
@@ -238,7 +257,7 @@
           <dict-tag :options="sys_normal_disable" :value="viewData.status" />
         </t-descriptions-item>
         <t-descriptions-item label="性别">
-          <dict-tag :options="sys_user_sex" :value="viewData.gender" />
+          <dict-tag :options="sys_user_gender" :value="viewData.gender" />
         </t-descriptions-item>
         <t-descriptions-item label="岗位">{{ viewInfo?.postGroup || '-' }}</t-descriptions-item>
         <t-descriptions-item :span="2" label="角色">{{ viewInfo?.roleGroup || '-' }}</t-descriptions-item>
@@ -256,6 +275,7 @@ import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 
 import { MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { computed, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import type { UserForm, UserQuery, UserVO } from '@/api/system/user/types';
 import {
@@ -270,13 +290,18 @@ import {
 } from '@/api/system/user';
 import { optionSelect as roleOptionSelect } from '@/api/system/role';
 import { optionselect as postOptionSelect } from '@/api/system/post';
+import { isSuperAdmin } from '@/constants';
 import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
+import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'SystemUser' });
 
-const { sys_normal_disable, sys_user_sex } = useDict('sys_normal_disable', 'sys_user_sex');
+const router = useRouter();
+
+const { sys_normal_disable, sys_user_gender } = useDict('sys_normal_disable', 'sys_user_gender');
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
 const list = ref<UserVO[]>([]);
 const loading = ref(false);
@@ -285,7 +310,14 @@ const selectedRows = ref<UserVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
 
-const queryParams = reactive<UserQuery>({ pageNum: 1, pageSize: 10, userName: '', phoneNumber: '', status: '' });
+const queryParams = reactive<UserQuery>({
+  pageNum: 1,
+  pageSize: 10,
+  userName: '',
+  nickName: '',
+  phoneNumber: '',
+  status: '',
+});
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
 const columns: PrimaryTableCol[] = [
@@ -297,7 +329,7 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'phoneNumber', title: '手机号码', width: 140 },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'createTime', title: '创建时间', width: 180 },
-  { colKey: 'operation', title: '操作', width: 200, fixed: 'right', align: 'center' },
+  { colKey: 'operation', title: '操作', width: 260, fixed: 'right', align: 'center' },
 ];
 
 // 左侧部门树
@@ -337,7 +369,7 @@ const onDeptActive = (vals: Array<string | number>) => {
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listUser(queryParams);
+    const res = await listUser(applyDateRange(queryParams));
     const data = res?.data;
     list.value = data?.rows ?? [];
     pagination.total = data?.total ?? 0;
@@ -363,9 +395,11 @@ const handleQuery = () => {
 };
 const resetQuery = () => {
   queryParams.userName = '';
+  queryParams.nickName = '';
   queryParams.phoneNumber = '';
   queryParams.status = '';
   queryParams.deptId = undefined;
+  resetDateRange();
   handleQuery();
 };
 const handleExport = () => download('/system/user/export', { ...queryParams }, `user_${Date.now()}.xlsx`);
@@ -513,6 +547,11 @@ const handleView = async (row: UserVO) => {
   viewInfo.value = res?.data ?? null;
   viewData.value = res?.data?.user ?? row;
   viewVisible.value = true;
+};
+
+// ---- 分配角色 ----
+const handleAuthRole = (row: UserVO) => {
+  router.push(`/system/user-auth/role/${row.userId}`);
 };
 
 loadDeptTree();

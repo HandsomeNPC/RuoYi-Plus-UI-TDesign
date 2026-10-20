@@ -16,6 +16,9 @@
         <t-form-item label="服务商" name="service"
           ><t-input v-model="queryParams.service" clearable placeholder="服务商"
         /></t-form-item>
+        <t-form-item label="创建时间" name="dateRange">
+          <t-date-range-picker v-model="dateRange" clearable style="width: 280px" value-type="YYYY-MM-DD HH:mm:ss" />
+        </t-form-item>
         <t-form-item :style="{ marginLeft: 'auto' }">
           <t-space>
             <t-button theme="primary" type="submit"
@@ -36,19 +39,18 @@
           :trigger-props="{ theme: 'primary' }"
           @success="onUploadSuccess"
         >
-          <t-button v-hasPermi="['resource:oss:upload']" theme="primary"
+          <t-button v-hasPermi="['system:oss:upload']" theme="primary"
             ><template #icon><upload-icon /></template>上传文件</t-button
           >
         </t-upload>
         <t-popconfirm content="是否确认删除选中的文件?" @confirm="handleDelete()">
-          <t-button
-            v-hasPermi="['resource:oss:remove']"
-            :disabled="!selectedRows.length"
-            theme="danger"
-            variant="outline"
+          <t-button v-hasPermi="['system:oss:remove']" :disabled="!selectedRows.length" theme="danger" variant="outline"
             ><template #icon><delete-icon /></template>删除</t-button
           >
         </t-popconfirm>
+        <t-button v-hasPermi="['system:ossConfig:list']" theme="default" variant="outline" @click="handleOssConfig"
+          ><template #icon><setting-icon /></template>配置管理</t-button
+        >
       </div>
 
       <t-table
@@ -74,7 +76,7 @@
             >
             <t-link :href="row.url" hover="color" target="_blank" theme="primary">下载</t-link>
             <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
-              <t-link v-hasPermi="['resource:oss:remove']" hover="color" theme="danger">删除</t-link>
+              <t-link v-hasPermi="['system:oss:remove']" hover="color" theme="danger">删除</t-link>
             </t-popconfirm>
           </t-space>
         </template>
@@ -90,15 +92,21 @@
 <script lang="ts" setup>
 import type { PageInfo, PrimaryTableCol, RequestMethodResponse, UploadFile } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { DeleteIcon, RefreshIcon, SearchIcon, UploadIcon } from 'tdesign-icons-vue-next';
+import { DeleteIcon, RefreshIcon, SearchIcon, SettingIcon, UploadIcon } from 'tdesign-icons-vue-next';
 import { reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import type { OssQuery, OssVO } from '@/api/system/oss/types';
 import { delOss, listOss, uploadOss } from '@/api/system/oss';
+import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { getToken } from '@/utils/auth';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'SystemOss' });
+
+const router = useRouter();
+
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
 const list = ref<OssVO[]>([]);
 const loading = ref(false);
@@ -135,7 +143,7 @@ const isImage = (suffix?: string) => {
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listOss(queryParams);
+    const res = await listOss(applyDateRange(queryParams));
     const d = res?.data;
     list.value = d?.rows ?? [];
     pagination.total = d?.total ?? 0;
@@ -162,6 +170,7 @@ const resetQuery = () => {
   queryParams.originalName = '';
   queryParams.fileSuffix = '';
   queryParams.service = '';
+  resetDateRange();
   handleQuery();
 };
 
@@ -200,6 +209,11 @@ const handleDelete = async (row?: OssVO) => {
   selectedKeys.value = [];
   selectedRows.value = [];
   getList();
+};
+
+// 跳转 OSS 配置管理（后端菜单：path oss-config/index，component system/oss/config）
+const handleOssConfig = () => {
+  router.push('/system/oss-config/index');
 };
 
 // getToken 引用避免未使用告警（未来扩展自定义上传头时使用）

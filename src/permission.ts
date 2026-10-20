@@ -11,7 +11,15 @@ import { closePush, initMessageBox, initPush } from '@/utils/push';
 
 NProgress.configure({ showSpinner: false });
 
-const whiteList = ['/login'];
+// 与原项目对齐：注册页、三方登录回调页未登录时也要能访问
+const whiteList = ['/login', '/register', '/social-callback'];
+
+const isWhiteList = (path: string) => {
+  if (whiteList.includes(path)) return true;
+  // 兼容 /register/<step> 形式
+  if (path.startsWith('/register')) return true;
+  return false;
+};
 
 // Vue Router 5：守卫返回值而非调用 next(value)
 router.beforeEach(async (to, _from) => {
@@ -58,7 +66,7 @@ router.beforeEach(async (to, _from) => {
   }
 
   // 没有 token
-  if (whiteList.includes(to.path)) {
+  if (isWhiteList(to.path)) {
     return true;
   }
   NProgress.done();

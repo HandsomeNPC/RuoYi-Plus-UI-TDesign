@@ -98,21 +98,27 @@
           />
         </t-form-item>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="岗位名称" name="postName"
               ><t-input v-model="form.postName" placeholder="请输入岗位名称" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="岗位编码" name="postCode"
               ><t-input v-model="form.postCode" placeholder="请输入岗位编码" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="显示顺序" name="postSort"
               ><t-input-number v-model="form.postSort" :min="0" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
+            ><t-form-item label="类别编码" name="postCategory"
+              ><t-input v-model="form.postCategory" placeholder="请输入类别编码" /></t-form-item
+          ></t-col>
+        </t-row>
+        <t-row>
+          <t-col :span="6"
             ><t-form-item label="岗位状态" name="status"
               ><dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" /></t-form-item
           ></t-col>

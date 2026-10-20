@@ -4,6 +4,10 @@ export interface OperLogQuery extends PageQuery {
   operName?: string;
   businessType?: string;
   status?: string;
+  clientKey?: string;
+  deviceType?: string;
+  os?: string;
+  browser?: string;
 }
 
 export interface OperLogVO extends BaseEntity {
@@ -18,6 +22,8 @@ export interface OperLogVO extends BaseEntity {
   deptName: string;
   browser: string;
   os: string;
+  clientKey: string;
+  deviceType: string;
   operUrl: string;
   operIp: string;
   operLocation: string;

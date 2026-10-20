@@ -65,6 +65,9 @@
         <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
         <template #operation="{ row }">
           <t-space size="small">
+            <t-link v-hasPermi="['system:notice:query']" hover="color" theme="primary" @click="handleDetail(row)"
+              >详细</t-link
+            >
             <t-link v-hasPermi="['system:notice:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
               >修改</t-link
             >
@@ -75,6 +78,23 @@
         </template>
       </t-table>
     </t-card>
+
+    <!-- 公告详情 抽屉（富文本只读预览） -->
+    <t-drawer v-model:visible="detailVisible" :footer="false" :header="detailData?.noticeTitle" size="520px">
+      <div v-if="detailData">
+        <t-descriptions :column="1" bordered>
+          <t-descriptions-item label="公告类型">
+            <dict-tag :options="sys_notice_type" :value="detailData.noticeType" />
+          </t-descriptions-item>
+          <t-descriptions-item label="状态">
+            <dict-tag :options="sys_notice_status" :value="detailData.status" />
+          </t-descriptions-item>
+          <t-descriptions-item label="创建人">{{ detailData.createByName || '-' }}</t-descriptions-item>
+          <t-descriptions-item label="创建时间">{{ parseTime(detailData.createTime) }}</t-descriptions-item>
+        </t-descriptions>
+        <div class="notice-detail-content" v-html="detailData.noticeContent || ''"></div>
+      </div>
+    </t-drawer>
 
     <t-dialog
       v-model:visible="dialogVisible"
@@ -88,11 +108,11 @@
           ><t-input v-model="form.noticeTitle" placeholder="请输入公告标题"
         /></t-form-item>
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="公告类型" name="noticeType"
               ><dict-select v-model="form.noticeType" placeholder="请选择" type="sys_notice_type" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="公告状态" name="status"
               ><dict-select v-model="form.status" placeholder="请选择" type="sys_notice_status" /></t-form-item
           ></t-col>
@@ -148,7 +168,7 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createByName', title: '创建人', width: 120 },
   { colKey: 'status', title: '状态', width: 100, align: 'center' },
   { colKey: 'createTime', title: '创建时间', width: 180 },
-  { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
+  { colKey: 'operation', title: '操作', width: 220, fixed: 'right', align: 'center' },
 ];
 
 const getList = async () => {
@@ -253,12 +273,30 @@ const handleDelete = async (row?: NoticeVO) => {
   getList();
 };
 
+// ---- 公告详情 ----
+const detailVisible = ref(false);
+const detailData = ref<NoticeVO | null>(null);
+const handleDetail = (row: NoticeVO) => {
+  detailData.value = row;
+  detailVisible.value = true;
+};
+
 getList();
 </script>
 
 <style lang="less" scoped>
 .notice-page {
   padding: 16px;
+}
+.notice-detail-content {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--td-component-stroke);
+  border-radius: var(--td-radius-default);
+  min-height: 200px;
+}
+.notice-detail-content :deep(img) {
+  max-width: 100%;
 }
 .card-title {
   font-weight: 600;

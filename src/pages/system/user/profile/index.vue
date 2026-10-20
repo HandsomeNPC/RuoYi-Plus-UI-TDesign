@@ -1,7 +1,7 @@
 <template>
   <div v-if="form.userName" class="profile-page">
     <t-row :gutter="16">
-      <t-col :lg="6" :xs="24">
+      <t-col :lg="3" :xs="12">
         <t-card :bordered="false">
           <div class="user-center">
             <div class="avatar-wrap" @click="avatarInput?.click()">
@@ -14,7 +14,7 @@
           </div>
         </t-card>
       </t-col>
-      <t-col :lg="18" :xs="24">
+      <t-col :lg="9" :xs="12">
         <t-card :bordered="false">
           <t-tabs v-model="activeTab">
             <t-tab-panel label="基本资料" value="base">
@@ -29,7 +29,7 @@
                   <t-input v-model="form.email" placeholder="请输入邮箱" />
                 </t-form-item>
                 <t-form-item label="性别" name="gender">
-                  <dict-select v-model="form.gender" placeholder="请选择" type="sys_user_sex" />
+                  <dict-select v-model="form.gender" placeholder="请选择" type="sys_user_gender" />
                 </t-form-item>
                 <t-form-item label="昵称" name="nickName">
                   <t-input v-model="form.nickName" placeholder="请输入昵称" />
@@ -120,7 +120,7 @@ import { useDict } from '@/utils/dict';
 defineOptions({ name: 'UserProfile' });
 
 const userStore = useUserStore();
-const { sys_user_sex } = useDict('sys_user_sex');
+const { sys_user_gender } = useDict('sys_user_gender');
 
 const activeTab = ref('base');
 const roleGroup = ref('');

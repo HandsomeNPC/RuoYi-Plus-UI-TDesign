@@ -4,7 +4,7 @@
       <template #title><div class="card-title">登录日志</div></template>
       <template #actions>
         <t-popconfirm content="是否清空所有登录日志?" @confirm="handleClean">
-          <t-button v-hasPermi="['monitor:logininfor:remove']" theme="danger" variant="outline"
+          <t-button v-hasPermi="['monitor:logininfo:remove']" theme="danger" variant="outline"
             ><template #icon><delete-icon /></template>清空</t-button
           >
         </t-popconfirm>
@@ -20,6 +20,9 @@
         <t-form-item label="状态" name="status"
           ><dict-select v-model="queryParams.status" placeholder="状态" style="width: 140px" type="sys_common_status"
         /></t-form-item>
+        <t-form-item label="登录时间" name="dateRange">
+          <t-date-range-picker v-model="dateRange" clearable style="width: 280px" value-type="YYYY-MM-DD HH:mm:ss" />
+        </t-form-item>
         <t-form-item :style="{ marginLeft: 'auto' }">
           <t-space>
             <t-button theme="primary" type="submit"
@@ -33,11 +36,11 @@
       </t-form>
 
       <div class="toolbar">
-        <t-button v-hasPermi="['monitor:logininfor:export']" theme="warning" variant="outline" @click="handleExport"
+        <t-button v-hasPermi="['monitor:logininfo:export']" theme="warning" variant="outline" @click="handleExport"
           ><template #icon><download-icon /></template>导出</t-button
         >
         <t-button
-          v-hasPermi="['monitor:logininfor:unlock']"
+          v-hasPermi="['monitor:logininfo:unlock']"
           :disabled="!selectedRows.length"
           theme="default"
           variant="outline"
@@ -59,10 +62,11 @@
         @page-change="onPageChange"
       >
         <template #status="{ row }"><dict-tag :options="sys_common_status" :value="row.status" /></template>
+        <template #deviceType="{ row }"><dict-tag :options="sys_device_type" :value="row.deviceType" /></template>
         <template #loginTime="{ row }">{{ parseTime(row.loginTime) }}</template>
         <template #operation="{ row }">
           <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
-            <t-link v-hasPermi="['monitor:logininfor:remove']" hover="color" theme="danger">删除</t-link>
+            <t-link v-hasPermi="['monitor:logininfo:remove']" hover="color" theme="danger">删除</t-link>
           </t-popconfirm>
         </template>
       </t-table>
@@ -79,13 +83,15 @@ import { reactive, ref } from 'vue';
 
 import type { LoginInfoQuery, LoginInfoVO } from '@/api/monitor/loginInfo/types';
 import { cleanLoginInfo, delLoginInfo, list, unlockLoginInfo } from '@/api/monitor/loginInfo';
+import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'MonitorLogininfo' });
 
-const { sys_common_status } = useDict('sys_common_status');
+const { sys_common_status, sys_device_type } = useDict('sys_common_status', 'sys_device_type');
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
 const listData = ref<LoginInfoVO[]>([]);
 const loading = ref(false);
@@ -101,6 +107,8 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'userName', title: '用户名称', width: 140 },
   { colKey: 'ipaddr', title: 'IP地址', width: 150 },
   { colKey: 'loginLocation', title: '登录地点', width: 160, ellipsis: true },
+  { colKey: 'clientKey', title: '客户端', width: 110, ellipsis: true },
+  { colKey: 'deviceType', title: '设备类型', width: 110, align: 'center' },
   { colKey: 'browser', title: '浏览器', width: 140 },
   { colKey: 'os', title: '操作系统', width: 140 },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
@@ -112,7 +120,7 @@ const columns: PrimaryTableCol[] = [
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await list(queryParams);
+    const res = await list(applyDateRange(queryParams));
     const data = res?.data;
     listData.value = data?.rows ?? [];
     pagination.total = data?.total ?? 0;
@@ -139,9 +147,10 @@ const resetQuery = () => {
   queryParams.userName = '';
   queryParams.ipaddr = '';
   queryParams.status = '';
+  resetDateRange();
   handleQuery();
 };
-const handleExport = () => download('/monitor/logininfor/export', { ...queryParams }, `logininfor_${Date.now()}.xlsx`);
+const handleExport = () => download('/monitor/loginInfo/export', { ...queryParams }, `logininfor_${Date.now()}.xlsx`);
 const handleDelete = async (row: LoginInfoVO) => {
   await delLoginInfo(row.infoId);
   MessagePlugin.success('删除成功');

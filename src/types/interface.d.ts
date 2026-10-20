@@ -14,6 +14,14 @@ export interface MenuRoute {
   redirect?: string;
   children: MenuRoute[];
   meta: RouteMeta;
+  /** 后端菜单 query（JSON 字符串解析后的对象），点击菜单时带上默认参数 */
+  query?: Record<string, any>;
+  /** 是否外链（点击用 window.open 打开，不走路由） */
+  isExternal?: boolean;
+  /** 外链地址 */
+  href?: string;
+  /** 仅一个可见子节点时提升为单项（沿用原项目 hasOneShowingChild 逻辑） */
+  single?: boolean;
 }
 
 export type ModeType = 'dark' | 'light';

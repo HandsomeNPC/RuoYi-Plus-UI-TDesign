@@ -26,12 +26,12 @@
       </t-form>
 
       <div class="toolbar">
-        <t-button v-hasPermi="['resource:oss:config:add']" theme="primary" @click="handleAdd"
+        <t-button v-hasPermi="['system:ossConfig:add']" theme="primary" @click="handleAdd"
           ><template #icon><add-icon /></template>新增</t-button
         >
         <t-popconfirm content="是否确认删除选中的配置?" @confirm="handleDelete()">
           <t-button
-            v-hasPermi="['resource:oss:config:remove']"
+            v-hasPermi="['system:ossConfig:remove']"
             :disabled="!selectedRows.length"
             theme="danger"
             variant="outline"
@@ -55,15 +55,19 @@
         <template #status="{ row }">
           <t-switch :value="row.status === '0'" @change="(v: any) => handleStatusChange(row, v)" />
         </template>
-        <template #isPrimary="{ row }"><dict-tag :options="sys_yes_no" :value="row.isPrimary" /></template>
+        <template #accessPolicy="{ row }">
+          <t-tag v-if="row.accessPolicy === '0'" theme="warning" variant="light">private</t-tag>
+          <t-tag v-else-if="row.accessPolicy === '1'" theme="success" variant="light">public</t-tag>
+          <t-tag v-else-if="row.accessPolicy === '2'" theme="primary" variant="light">custom</t-tag>
+        </template>
         <template #isHttps="{ row }"><dict-tag :options="sys_yes_no" :value="row.isHttps" /></template>
         <template #operation="{ row }">
           <t-space size="small">
-            <t-link v-hasPermi="['resource:oss:config:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
+            <t-link v-hasPermi="['system:ossConfig:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
               >修改</t-link
             >
             <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
-              <t-link v-hasPermi="['resource:oss:config:remove']" hover="color" theme="danger">删除</t-link>
+              <t-link v-hasPermi="['system:ossConfig:remove']" hover="color" theme="danger">删除</t-link>
             </t-popconfirm>
           </t-space>
         </template>
@@ -79,47 +83,61 @@
     >
       <t-form ref="formRef" :data="form" :rules="rules" label-width="120px" @submit="onSubmit">
         <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="配置key" name="configKey"
               ><t-input
                 v-model="form.configKey"
                 :disabled="!!form.ossConfigId"
                 placeholder="请输入配置key" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
+            ><t-form-item label="访问站点" name="endpoint"
+              ><t-input v-model="form.endpoint" placeholder="请输入访问站点" /></t-form-item
+          ></t-col>
+        </t-row>
+        <t-row>
+          <t-col :span="6"
+            ><t-form-item label="自定义域名" name="domainUrl"
+              ><t-input v-model="form.domainUrl" placeholder="请输入自定义域名" /></t-form-item
+          ></t-col>
+          <t-col :span="6"
             ><t-form-item label="桶名称" name="bucketName"
               ><t-input v-model="form.bucketName" placeholder="请输入桶名称" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
-            ><t-form-item label="访问域名" name="accessDomain"
-              ><t-input v-model="form.accessDomain" placeholder="请输入访问域名" /></t-form-item
-          ></t-col>
-          <t-col :span="12"
-            ><t-form-item label="region" name="region"
-              ><t-input v-model="form.region" placeholder="请输入region" /></t-form-item
-          ></t-col>
-        </t-row>
-        <t-row>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="accessKey" name="accessKey"
               ><t-input v-model="form.accessKey" placeholder="请输入accessKey" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
             ><t-form-item label="secretKey" name="secretKey"
-              ><t-input v-model="form.secretKey" placeholder="请输入secretKey" /></t-form-item
+              ><t-input v-model="form.secretKey" placeholder="请输入秘钥" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
-          <t-col :span="12"
-            ><t-form-item label="是否主配置" name="isPrimary"
-              ><dict-select v-model="form.isPrimary" placeholder="请选择" type="sys_yes_no" /></t-form-item
+          <t-col :span="6"
+            ><t-form-item label="前缀" name="prefix"
+              ><t-input v-model="form.prefix" placeholder="请输入前缀" /></t-form-item
           ></t-col>
-          <t-col :span="12"
+          <t-col :span="6"
+            ><t-form-item label="域" name="region"><t-input v-model="form.region" placeholder="请输入域" /></t-form-item
+          ></t-col>
+        </t-row>
+        <t-row>
+          <t-col :span="6"
             ><t-form-item label="是否HTTPS" name="isHttps"
               ><dict-select v-model="form.isHttps" placeholder="请选择" type="sys_yes_no" /></t-form-item
           ></t-col>
+          <t-col :span="6"
+            ><t-form-item label="桶权限类型" name="accessPolicy"
+              ><t-radio-group v-model="form.accessPolicy">
+                <t-radio value="0">private</t-radio>
+                <t-radio value="1">public</t-radio>
+                <t-radio value="2">custom</t-radio>
+              </t-radio-group></t-form-item
+            ></t-col
+          >
         </t-row>
         <t-form-item label="状态" name="status"
           ><dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable"
@@ -162,10 +180,11 @@ const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: tr
 const columns: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'configKey', title: '配置key', width: 180 },
-  { colKey: 'bucketName', title: '桶名称', width: 180 },
-  { colKey: 'accessDomain', title: '访问域名', width: 240, ellipsis: true },
-  { colKey: 'region', title: 'region', width: 120 },
-  { colKey: 'isPrimary', title: '主配置', width: 90, align: 'center' },
+  { colKey: 'bucketName', title: '桶名称', width: 160 },
+  { colKey: 'endpoint', title: '访问站点', width: 200, ellipsis: true },
+  { colKey: 'domainUrl', title: '自定义域名', width: 200, ellipsis: true },
+  { colKey: 'accessPolicy', title: '桶权限', width: 100, align: 'center' },
+  { colKey: 'region', title: '域', width: 100 },
   { colKey: 'isHttps', title: 'HTTPS', width: 90, align: 'center' },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
@@ -222,19 +241,23 @@ const initForm = (): OssConfigForm => ({
   ossConfigId: undefined,
   configKey: '',
   bucketName: '',
-  accessDomain: '',
-  region: '',
+  prefix: '',
+  endpoint: '',
+  domainUrl: '',
   accessKey: '',
   secretKey: '',
-  isPrimary: 'N',
   isHttps: 'N',
+  accessPolicy: '1',
+  region: '',
   status: '0',
   remark: '',
 });
 const form = reactive<OssConfigForm>(initForm());
 const rules: Record<string, FormRule[]> = {
   configKey: [{ required: true, message: '请输入配置key', type: 'error' }],
+  endpoint: [{ required: true, message: 'endpoint不能为空', type: 'error' }],
   bucketName: [{ required: true, message: '请输入桶名称', type: 'error' }],
+  accessPolicy: [{ required: true, message: 'accessPolicy不能为空', type: 'error' }],
 };
 
 const handleAdd = () => {
@@ -247,10 +270,14 @@ const handleUpdate = (row: OssConfigVO) => {
     ossConfigId: row.ossConfigId,
     configKey: row.configKey,
     bucketName: row.bucketName,
-    accessDomain: row.accessDomain,
-    region: row.region,
-    isPrimary: row.isPrimary,
+    prefix: row.prefix,
+    endpoint: row.endpoint,
+    domainUrl: row.domainUrl,
+    accessKey: row.accessKey,
+    secretKey: row.secretKey,
     isHttps: row.isHttps,
+    accessPolicy: row.accessPolicy,
+    region: row.region,
     status: row.status,
     remark: row.remark,
   });

@@ -15,6 +15,9 @@
             <t-option v-for="n in dataNames" :key="n" :label="n" :value="n" />
           </t-select>
         </t-form-item>
+        <t-form-item label="创建时间" name="dateRange">
+          <t-date-range-picker v-model="dateRange" clearable style="width: 280px" value-type="YYYY-MM-DD HH:mm:ss" />
+        </t-form-item>
         <t-form-item :style="{ marginLeft: 'auto' }">
           <t-space>
             <t-button theme="primary" type="submit"
@@ -315,10 +318,13 @@ import {
   updateGenTable,
 } from '@/api/tool/gen';
 import { treeselect as menuTreeselect } from '@/api/system/menu';
+import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { download } from '@/utils/request';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'ToolGen' });
+
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
 const list = ref<TableVO[]>([]);
 const loading = ref(false);
@@ -342,7 +348,7 @@ const columns: PrimaryTableCol[] = [
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listTable(queryParams);
+    const res = await listTable(applyDateRange(queryParams));
     const data = res?.data;
     list.value = data?.rows ?? [];
     pagination.total = data?.total ?? 0;
@@ -370,6 +376,7 @@ const resetQuery = () => {
   queryParams.tableName = '';
   queryParams.tableComment = '';
   queryParams.dataName = '';
+  resetDateRange();
   handleQuery();
 };
 

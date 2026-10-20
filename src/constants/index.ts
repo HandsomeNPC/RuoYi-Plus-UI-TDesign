@@ -35,3 +35,24 @@ export enum ContentTypeEnum {
   FormURLEncoded = 'application/x-www-form-urlencoded;charset=UTF-8',
   FormData = 'multipart/form-data;charset=UTF-8',
 }
+
+/**
+ * 超级管理员用户 ID（RuoYi-Plus 默认种子数据，雪花 ID 字符串）。
+ * 用于在用户/角色列表中屏蔽对超管的状态切换、重置密码、删除等操作。
+ * 与原项目一致：scope.row.userId !== '1761100000000000001'。
+ */
+export const SUPER_ADMIN_ID = '1761100000000000001';
+
+export const isSuperAdmin = (userId: string | number | undefined | null): boolean => {
+  return userId !== undefined && userId !== null && String(userId) === SUPER_ADMIN_ID;
+};
+
+/**
+ * 超级管理员角色 ID（RuoYi-Plus 默认种子数据，雪花 ID 字符串）。
+ * 用于在角色列表中屏蔽对超管角色的分配用户等操作。
+ */
+export const SUPER_ADMIN_ROLE_ID = '1761300000000000001';
+
+export const isSuperAdminRole = (roleId: string | number | undefined | null): boolean => {
+  return roleId !== undefined && roleId !== null && String(roleId) === SUPER_ADMIN_ROLE_ID;
+};

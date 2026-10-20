@@ -21,6 +21,9 @@
             type="sys_normal_disable"
           />
         </t-form-item>
+        <t-form-item label="创建时间" name="dateRange">
+          <t-date-range-picker v-model="dateRange" clearable style="width: 280px" value-type="YYYY-MM-DD HH:mm:ss" />
+        </t-form-item>
         <t-form-item :style="{ marginLeft: 'auto' }">
           <t-space>
             <t-button theme="primary" type="submit">
@@ -56,6 +59,10 @@
             删除
           </t-button>
         </t-popconfirm>
+        <t-button v-hasPermi="['system:role:export']" theme="warning" variant="outline" @click="handleExport">
+          <template #icon><download-icon /></template>
+          导出
+        </t-button>
       </div>
 
       <t-table
@@ -83,6 +90,14 @@
             <t-link v-hasPermi="['system:role:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
               >修改权限</t-link
             >
+            <t-link
+              v-if="!isSuperAdminRole(row.roleId)"
+              v-hasPermi="['system:role:edit']"
+              hover="color"
+              theme="primary"
+              @click="handleAuthUser(row)"
+              >分配用户</t-link
+            >
             <t-popconfirm content="是否确认删除该角色?" @confirm="handleDelete(row)">
               <t-link v-hasPermi="['system:role:remove']" hover="color" theme="danger">删除</t-link>
             </t-popconfirm>
@@ -103,24 +118,24 @@
         <t-tab-panel label="基础信息" value="base">
           <t-form ref="formRef" :data="form" :rules="rules" label-width="100px">
             <t-row>
-              <t-col :span="12">
+              <t-col :span="6">
                 <t-form-item label="角色名称" name="roleName">
                   <t-input v-model="form.roleName" placeholder="请输入角色名称" />
                 </t-form-item>
               </t-col>
-              <t-col :span="12">
+              <t-col :span="6">
                 <t-form-item label="权限字符" name="roleKey">
                   <t-input v-model="form.roleKey" placeholder="如 admin" />
                 </t-form-item>
               </t-col>
             </t-row>
             <t-row>
-              <t-col :span="12">
+              <t-col :span="6">
                 <t-form-item label="显示排序" name="roleSort">
                   <t-input-number v-model="form.roleSort" :min="0" />
                 </t-form-item>
               </t-col>
-              <t-col :span="12">
+              <t-col :span="6">
                 <t-form-item label="角色状态" name="status">
                   <dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" />
                 </t-form-item>
@@ -194,8 +209,9 @@
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { AddIcon, DeleteIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { computed, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import type { RoleForm, RoleQuery, RoleVO } from '@/api/system/role/types';
 import {
@@ -211,12 +227,18 @@ import type { MenuTreeOption } from '@/api/system/menu/types';
 import { roleMenuTreeselect, treeselect as menuTreeselect } from '@/api/system/menu';
 import type { DeptVO } from '@/api/system/dept/types';
 import { listDept } from '@/api/system/dept';
+import { isSuperAdminRole } from '@/constants';
+import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
+import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { handleTree, parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'SystemRole' });
 
+const router = useRouter();
+
 const { sys_normal_disable } = useDict('sys_normal_disable');
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
 const roleList = ref<RoleVO[]>([]);
 const loading = ref(false);
@@ -249,13 +271,13 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'roleSort', title: '显示顺序', width: 100, align: 'center' },
   { colKey: 'status', title: '状态', width: 100, align: 'center' },
   { colKey: 'createTime', title: '创建时间', width: 180 },
-  { colKey: 'operation', title: '操作', width: 180, fixed: 'right', align: 'center' },
+  { colKey: 'operation', title: '操作', width: 240, fixed: 'right', align: 'center' },
 ];
 
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listRole(queryParams);
+    const res = await listRole(applyDateRange(queryParams));
     const data = res?.data;
     roleList.value = data?.rows ?? [];
     pagination.total = data?.total ?? 0;
@@ -286,6 +308,7 @@ const resetQuery = () => {
   queryParams.roleName = '';
   queryParams.roleKey = '';
   queryParams.status = '';
+  resetDateRange();
   handleQuery();
 };
 
@@ -466,6 +489,14 @@ const handleDelete = async (row?: RoleVO) => {
   selectedRows.value = [];
   getList();
 };
+
+// ---- 分配用户 ----
+const handleAuthUser = (row: RoleVO) => {
+  router.push(`/system/role-auth/user/${row.roleId}`);
+};
+
+// ---- 导出 ----
+const handleExport = () => download('/system/role/export', { ...queryParams }, `role_${Date.now()}.xlsx`);
 
 getList();
 </script>

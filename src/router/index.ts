@@ -101,8 +101,11 @@ const router = createRouter({
 // 计算当前激活的菜单层级路径（供 Header / 侧边栏高亮）
 export const getActive = (maxLevel = 3): string => {
   const route = router.currentRoute.value;
-  if (!route.path) return '';
-  return route.path
+  // 隐藏子页面（如分配角色）通过 meta.activeMenu 指定要高亮的父菜单
+  const activeMenu = route.meta?.activeMenu as string | undefined;
+  const raw = activeMenu || route.path;
+  if (!raw) return '';
+  return raw
     .split('/')
     .filter((_item: string, index: number) => index <= maxLevel && index > 0)
     .map((item: string) => `/${item}`)

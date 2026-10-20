@@ -89,39 +89,53 @@
             clearable
             filterable
             placeholder="请选择上级部门"
+            @change="onParentChange"
           />
         </t-form-item>
         <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="部门名称" name="deptName">
               <t-input v-model="form.deptName" placeholder="请输入部门名称" />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+          <t-col :span="6">
+            <t-form-item label="类别编码" name="deptCategory">
+              <t-input v-model="form.deptCategory" placeholder="请输入类别编码" />
+            </t-form-item>
+          </t-col>
+        </t-row>
+        <t-row>
+          <t-col :span="6">
             <t-form-item label="显示排序" name="orderNum">
               <t-input-number v-model="form.orderNum" :min="0" />
             </t-form-item>
           </t-col>
-        </t-row>
-        <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="负责人" name="leader">
-              <t-input v-model="form.leader" placeholder="请输入负责人" />
+              <t-select
+                v-model="form.leader"
+                :options="deptUserOptions"
+                clearable
+                filterable
+                placeholder="请选择负责人"
+              />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+        </t-row>
+        <t-row>
+          <t-col :span="6">
             <t-form-item label="联系电话" name="phone">
               <t-input v-model="form.phone" placeholder="请输入联系电话" />
             </t-form-item>
           </t-col>
-        </t-row>
-        <t-row>
-          <t-col :span="12">
+          <t-col :span="6">
             <t-form-item label="邮箱" name="email">
               <t-input v-model="form.email" placeholder="请输入邮箱" />
             </t-form-item>
           </t-col>
-          <t-col :span="12">
+        </t-row>
+        <t-row>
+          <t-col :span="6">
             <t-form-item label="部门状态" name="status">
               <dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" />
             </t-form-item>
@@ -140,6 +154,7 @@ import { computed, reactive, ref } from 'vue';
 
 import type { DeptForm, DeptQuery, DeptVO } from '@/api/system/dept/types';
 import { addDept, delDept, listDept, listDeptExcludeChild, updateDept } from '@/api/system/dept';
+import { listUserByDeptId } from '@/api/system/user';
 import { useDict } from '@/utils/dict';
 import { handleTree, parseTime } from '@/utils/ruoyi';
 
@@ -151,6 +166,29 @@ const deptList = ref<DeptVO[]>([]);
 const loading = ref(false);
 const isExpandAll = ref(true);
 const tableRef = ref();
+
+// 负责人下拉：来自所选上级部门下的用户列表（后端 SysDeptBo.leader 是 Long）
+const deptUserOptions = ref<{ label: string; value: string | number }[]>([]);
+const loadDeptUsers = async (deptId?: string | number) => {
+  if (deptId === undefined || deptId === null || deptId === '') {
+    deptUserOptions.value = [];
+    return;
+  }
+  try {
+    const res = await listUserByDeptId(deptId);
+    const list = (res?.data ?? []) as any[];
+    deptUserOptions.value = list.map((u) => ({
+      label: u.nickName ? `${u.nickName}(${u.userName})` : u.userName,
+      value: u.userId,
+    }));
+  } catch {
+    deptUserOptions.value = [];
+  }
+};
+const onParentChange = (val: any) => {
+  form.leader = undefined;
+  loadDeptUsers(val);
+};
 
 const queryParams = reactive<DeptQuery>({
   pageNum: 1,
@@ -242,6 +280,7 @@ const handleAdd = async (row?: DeptVO) => {
   Object.assign(form, initForm());
   if (row) form.parentId = row.deptId;
   await loadParentOptions();
+  await loadDeptUsers(form.parentId);
   dialogTitle.value = '新增部门';
   dialogVisible.value = true;
 };
@@ -260,6 +299,7 @@ const handleUpdate = async (row: DeptVO) => {
     status: row.status,
   });
   await loadParentOptions(row.deptId);
+  await loadDeptUsers(form.parentId);
   dialogTitle.value = '修改部门';
   dialogVisible.value = true;
 };

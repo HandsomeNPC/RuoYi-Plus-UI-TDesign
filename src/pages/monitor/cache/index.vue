@@ -1,7 +1,7 @@
 <template>
   <div class="cache-page">
     <t-row :gutter="16">
-      <t-col :lg="8" :xs="24">
+      <t-col :lg="4" :xs="12">
         <t-card :bordered="false" title="Redis 基本信息">
           <t-descriptions :column="1" bordered>
             <t-descriptions-item label="Redis版本">{{ info?.redis_version || '—' }}</t-descriptions-item>
@@ -12,13 +12,13 @@
             <t-descriptions-item label="使用内存">{{ info?.used_memory_human || '—' }}</t-descriptions-item>
             <t-descriptions-item label="使用CPU">{{ info?.used_cpu_user || '—' }}</t-descriptions-item>
             <t-descriptions-item label="内存配置">{{ info?.maxmemory_human || '—' }}</t-descriptions-item>
-            <t-descriptions-item label="AOF是否开启">{{ info?.rdb_last_bgsave_status || '—' }}</t-descriptions-item>
+            <t-descriptions-item label="AOF是否开启">{{ info?.aof_enabled || '—' }}</t-descriptions-item>
             <t-descriptions-item label="RDB是否成功">{{ info?.rdb_last_bgsave_status || '—' }}</t-descriptions-item>
             <t-descriptions-item label="Key数量">{{ dbSize }}</t-descriptions-item>
           </t-descriptions>
         </t-card>
       </t-col>
-      <t-col :lg="16" :xs="24">
+      <t-col :lg="8" :xs="12">
         <t-card :bordered="false" title="命令统计">
           <t-table :columns="cmdColumns" :data="commandStats" :loading="loading" hover row-key="name" stripe>
             <template #value="{ row }">

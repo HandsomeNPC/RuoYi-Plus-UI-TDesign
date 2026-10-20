@@ -1,20 +1,28 @@
 <template>
   <div>
     <template v-for="item in list" :key="item.path">
-      <template v-if="!item.children || !item.children.length || item.meta?.single">
-        <t-menu-item v-if="getHref(item)" :name="item.path" :value="getPath(item)" @click="openHref(getHref(item)![0])">
-          <template #icon>
-            <component :is="menuIcon(item)" class="t-icon"></component>
-          </template>
-          {{ renderMenuTitle(item.title) }}
-        </t-menu-item>
-        <t-menu-item v-else :name="item.path" :value="getPath(item)" :to="item.path">
-          <template #icon>
-            <component :is="menuIcon(item)" class="t-icon"></component>
-          </template>
-          {{ renderMenuTitle(item.title) }}
-        </t-menu-item>
-      </template>
+      <!-- 外链：window.open 打开，不走路由 -->
+      <t-menu-item v-if="item.isExternal" :name="item.path" :value="getPath(item)" @click="openHref(item.href)">
+        <template #icon>
+          <component :is="menuIcon(item)" class="t-icon"></component>
+        </template>
+        {{ renderMenuTitle(item.title) }}
+      </t-menu-item>
+
+      <!-- 叶子节点（含单子节点提升）：路由跳转 -->
+      <t-menu-item
+        v-else-if="!item.children || !item.children.length || item.single"
+        :name="item.path"
+        :to="toLocation(item)"
+        :value="getPath(item)"
+      >
+        <template #icon>
+          <component :is="menuIcon(item)" class="t-icon"></component>
+        </template>
+        {{ renderMenuTitle(item.title) }}
+      </t-menu-item>
+
+      <!-- 父级：子菜单递归 -->
       <t-submenu v-else :name="item.path" :value="item.path" :title="renderMenuTitle(item.title)">
         <template #icon>
           <component :is="menuIcon(item)" class="t-icon"></component>
@@ -32,6 +40,7 @@ import SvgIcon from '@/components/SvgIcon/index.vue';
 import type { LocalizedTitle } from '@/locales';
 import { useLocale } from '@/locales/useLocale';
 import { getActive } from '@/router';
+import { getNormalPath, isExternal } from '@/utils/ruoyi';
 import type { MenuRoute } from '@/types/interface';
 
 type ListItemType = MenuRoute;
@@ -61,41 +70,98 @@ const renderMenuTitle = (title?: LocalizedTitle) => {
   return title[locale.value as keyof LocalizedTitle] || '';
 };
 
-function getMenuList(list: MenuRoute[], basePath?: string): MenuRoute[] {
-  if (!list || list.length === 0) {
+/**
+ * 把后端路由树整理成侧边栏菜单：
+ *  - 过滤 hidden
+ *  - 按 meta.orderNo 排序
+ *  - 解析 meta.query（后端 JSON 字符串）
+ *  - 识别外链（isExternal(path) / meta.link / meta.frameSrc）
+ *  - 单可见子节点提升（沿用原项目 hasOneShowingChild）：父级只有一个叶子子节点时，
+ *    把它提升为单项显示，父级 meta 为空（如 AI会话）也能正常渲染。
+ */
+function getMenuList(source: MenuRoute[], basePath?: string): MenuRoute[] {
+  if (!source || source.length === 0) {
     return [];
   }
-  // 如果meta中有orderNo则按照从小到大排序
-  list.sort((a, b) => {
-    return (a.meta?.orderNo || 0) - (b.meta?.orderNo || 0);
+  const sorted = [...source].sort((a, b) => {
+    return ((a.meta?.orderNo as number) || 0) - ((b.meta?.orderNo as number) || 0);
   });
-  return list
-    .map((item) => {
-      const path = basePath && !item.path.includes(basePath) ? `${basePath}/${item.path}` : item.path;
 
-      return {
-        path,
-        title: item.meta?.title as LocalizedTitle | undefined,
-        icon: item.meta?.icon,
-        children: getMenuList(item.children, path),
-        meta: item.meta,
-        redirect: item.redirect,
-      } as MenuRoute;
-    })
-    .filter((item) => item.meta && item.meta.hidden !== true);
+  const result: MenuRoute[] = [];
+  sorted.forEach((item) => {
+    if (item.meta?.hidden === true) return;
+
+    const itemPath = String(item.path ?? '');
+    const external = isExternal(itemPath) || !!item.meta?.link || !!item.meta?.frameSrc;
+    const resolvedPath = external
+      ? itemPath
+      : basePath && !itemPath.includes(basePath)
+        ? getNormalPath(`${basePath}/${itemPath}`)
+        : getNormalPath(itemPath);
+
+    // 解析后端 meta.query（JSON 字符串）为对象
+    let query: Record<string, any> | undefined;
+    const rawQuery = item.meta?.query as any;
+    if (rawQuery && typeof rawQuery === 'string') {
+      try {
+        query = JSON.parse(rawQuery);
+      } catch {
+        query = undefined;
+      }
+    } else if (rawQuery && typeof rawQuery === 'object') {
+      query = rawQuery;
+    }
+
+    const children = getMenuList(item.children, resolvedPath);
+    const hasChildren = children && children.length > 0;
+
+    const node: MenuRoute = {
+      path: resolvedPath,
+      title: (item.meta?.title as LocalizedTitle | undefined) ?? (item.title as LocalizedTitle | undefined),
+      icon: (item.meta?.icon as any) ?? item.icon,
+      children,
+      meta: item.meta,
+      redirect: item.redirect,
+      query,
+      isExternal: external,
+      href: external ? (item.meta?.link as string) || (item.meta?.frameSrc as string) || itemPath : undefined,
+    };
+
+    // 单可见子节点提升：父级只有一个叶子子节点、且未声明 alwaysShow 时，提升为单项
+    if (
+      !external &&
+      !item.meta?.alwaysShow &&
+      hasChildren &&
+      children.length === 1 &&
+      (!children[0].children || children[0].children.length === 0)
+    ) {
+      const only = children[0];
+      result.push({
+        ...only,
+        // 父级图标作为兜底
+        icon: only.icon || node.icon,
+        title: only.title || node.title,
+        single: true,
+      });
+      return;
+    }
+
+    result.push(node);
+  });
+  return result;
 }
 
-const getHref = (item: MenuRoute) => {
-  const { frameSrc, frameBlank } = item.meta;
-  if (frameSrc && frameBlank) {
-    return frameSrc.match(/(https?):\/\/([\w.-]+)(?:\/\S*)?/);
+/** t-menu-item 的路由跳转目标：有 query 时用对象形式 */
+const toLocation = (item: ListItemType): any => {
+  if (item.query && Object.keys(item.query).length) {
+    return { path: item.path, query: item.query };
   }
-  return null;
+  return item.path;
 };
 
 const getPath = (item: ListItemType) => {
   const activeLevel = active.value.split('/').length;
-  const pathLevel = item.path.split('/').length;
+  const pathLevel = String(item.path).split('/').length;
   if (activeLevel > pathLevel && active.value.startsWith(item.path)) {
     return active.value;
   }
@@ -107,7 +173,7 @@ const getPath = (item: ListItemType) => {
   return item.meta?.single ? item.redirect : item.path;
 };
 
-const openHref = (url: string) => {
-  window.open(url);
+const openHref = (url?: string) => {
+  if (url) window.open(url);
 };
 </script>

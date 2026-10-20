@@ -6,6 +6,8 @@ export interface LoginInfoVO {
   loginLocation: string;
   browser: string;
   os: string;
+  clientKey: string;
+  deviceType: string;
   msg: string;
   loginTime: string;
 }
@@ -14,4 +16,6 @@ export interface LoginInfoQuery extends PageQuery {
   ipaddr?: string;
   userName?: string;
   status?: string;
+  clientKey?: string;
+  deviceType?: string;
 }

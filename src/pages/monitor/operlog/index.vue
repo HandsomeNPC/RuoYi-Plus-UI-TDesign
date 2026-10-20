@@ -17,6 +17,25 @@
         <t-form-item label="操作人员" name="operName"
           ><t-input v-model="queryParams.operName" clearable placeholder="请输入操作人员"
         /></t-form-item>
+        <t-form-item label="操作地址" name="operIp"
+          ><t-input v-model="queryParams.operIp" clearable placeholder="请输入操作地址"
+        /></t-form-item>
+        <t-form-item label="客户端" name="clientKey"
+          ><t-input v-model="queryParams.clientKey" clearable placeholder="请输入客户端"
+        /></t-form-item>
+        <t-form-item label="设备类型" name="deviceType"
+          ><dict-select
+            v-model="queryParams.deviceType"
+            placeholder="设备类型"
+            style="width: 140px"
+            type="sys_device_type"
+        /></t-form-item>
+        <t-form-item label="操作系统" name="os"
+          ><t-input v-model="queryParams.os" clearable placeholder="请输入操作系统"
+        /></t-form-item>
+        <t-form-item label="浏览器" name="browser"
+          ><t-input v-model="queryParams.browser" clearable placeholder="请输入浏览器"
+        /></t-form-item>
         <t-form-item label="操作类型" name="businessType"
           ><dict-select
             v-model="queryParams.businessType"
@@ -27,6 +46,9 @@
         <t-form-item label="状态" name="status"
           ><dict-select v-model="queryParams.status" placeholder="状态" style="width: 140px" type="sys_common_status"
         /></t-form-item>
+        <t-form-item label="操作时间" name="dateRange">
+          <t-date-range-picker v-model="dateRange" clearable style="width: 280px" value-type="YYYY-MM-DD HH:mm:ss" />
+        </t-form-item>
         <t-form-item :style="{ marginLeft: 'auto' }">
           <t-space>
             <t-button theme="primary" type="submit"
@@ -57,6 +79,7 @@
       >
         <template #businessType="{ row }"><dict-tag :options="sys_oper_type" :value="row.businessType" /></template>
         <template #status="{ row }"><dict-tag :options="sys_common_status" :value="row.status" /></template>
+        <template #deviceType="{ row }"><dict-tag :options="sys_device_type" :value="row.deviceType" /></template>
         <template #operTime="{ row }">{{ parseTime(row.operTime) }}</template>
         <template #operation="{ row }">
           <t-space size="small">
@@ -98,13 +121,19 @@ import { reactive, ref } from 'vue';
 
 import type { OperLogQuery, OperLogVO } from '@/api/monitor/operlog/types';
 import { cleanOperlog, delOperlog, list } from '@/api/monitor/operlog';
+import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'MonitorOperlog' });
 
-const { sys_oper_type, sys_common_status } = useDict('sys_oper_type', 'sys_common_status');
+const { sys_oper_type, sys_common_status, sys_device_type } = useDict(
+  'sys_oper_type',
+  'sys_common_status',
+  'sys_device_type',
+);
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
 const listData = ref<OperLogVO[]>([]);
 const loading = ref(false);
@@ -116,6 +145,11 @@ const queryParams = reactive<OperLogQuery>({
   pageSize: 10,
   title: '',
   operName: '',
+  operIp: '',
+  clientKey: '',
+  deviceType: '',
+  os: '',
+  browser: '',
   businessType: '',
   status: '',
 });
@@ -129,15 +163,20 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'deptName', title: '部门名称', width: 160, ellipsis: true },
   { colKey: 'operIp', title: '主机', width: 140 },
   { colKey: 'operLocation', title: '操作地点', width: 160, ellipsis: true },
+  { colKey: 'clientKey', title: '客户端', width: 110, ellipsis: true },
+  { colKey: 'deviceType', title: '设备类型', width: 110, align: 'center' },
+  { colKey: 'os', title: '操作系统', width: 130, ellipsis: true },
+  { colKey: 'browser', title: '浏览器', width: 130, ellipsis: true },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'operTime', title: '操作时间', width: 180 },
+  { colKey: 'costTime', title: '消耗(ms)', width: 100, align: 'center' },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
 
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await list(queryParams);
+    const res = await list(applyDateRange(queryParams));
     const data = res?.data;
     listData.value = data?.rows ?? [];
     pagination.total = data?.total ?? 0;
@@ -159,8 +198,14 @@ const handleQuery = () => {
 const resetQuery = () => {
   queryParams.title = '';
   queryParams.operName = '';
+  queryParams.operIp = '';
+  queryParams.clientKey = '';
+  queryParams.deviceType = '';
+  queryParams.os = '';
+  queryParams.browser = '';
   queryParams.businessType = '';
   queryParams.status = '';
+  resetDateRange();
   handleQuery();
 };
 const handleExport = () => download('/monitor/operlog/export', { ...queryParams }, `operlog_${Date.now()}.xlsx`);
