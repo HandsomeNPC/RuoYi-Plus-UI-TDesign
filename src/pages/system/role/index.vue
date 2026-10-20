@@ -86,23 +86,18 @@
       >
         <template #status="{ row }">
           <t-switch
-            :disabled="row.admin"
+            :disabled="isSuperAdminRole(row.roleId)"
             :value="row.status === '0'"
             @change="(v: any) => handleStatusChange(row, v)"
           />
         </template>
         <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
         <template #operation="{ row }">
-          <t-space size="small">
+          <t-space v-if="!isSuperAdminRole(row.roleId)" size="small">
             <t-link v-hasPermi="['system:role:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
               >修改权限</t-link
             >
-            <t-link
-              v-if="!isSuperAdminRole(row.roleId)"
-              v-hasPermi="['system:role:edit']"
-              hover="color"
-              theme="primary"
-              @click="handleAuthUser(row)"
+            <t-link v-hasPermi="['system:role:edit']" hover="color" theme="primary" @click="handleAuthUser(row)"
               >分配用户</t-link
             >
             <t-popconfirm content="是否确认删除该角色?" @confirm="handleDelete(row)">
@@ -122,7 +117,7 @@
       width="780px"
     >
       <t-tabs v-model="activeTab">
-        <t-tab-panel label="基础信息" value="base">
+        <t-tab-panel :destroy-on-hide="false" label="基础信息" value="base">
           <t-form ref="formRef" :data="form" :rules="rules" label-width="100px">
             <t-row>
               <t-col :span="6">
@@ -154,7 +149,7 @@
           </t-form>
         </t-tab-panel>
 
-        <t-tab-panel label="菜单权限" value="menu">
+        <t-tab-panel :destroy-on-hide="false" label="菜单权限" value="menu">
           <div class="tree-toolbar">
             <t-checkbox v-model="form.menuCheckStrictly">父子联动</t-checkbox>
             <t-space size="small">
@@ -193,12 +188,12 @@
           </div>
         </t-tab-panel>
 
-        <t-tab-panel label="数据权限" value="data">
+        <t-tab-panel :destroy-on-hide="false" label="数据权限" value="data">
           <t-form :data="form" label-width="100px">
             <t-form-item label="数据范围" name="dataScope">
               <t-select v-model="form.dataScope" :options="dataScopeOptions" />
             </t-form-item>
-            <t-form-item v-if="form.dataScope === '2'" label="数据权限">
+            <t-form-item v-show="form.dataScope === '2'" label="数据权限">
               <div class="tree-toolbar">
                 <t-checkbox v-model="form.deptCheckStrictly">父子联动</t-checkbox>
                 <t-space size="small">
@@ -206,18 +201,21 @@
                   <t-button size="small" theme="primary" variant="text" @click="expandDeptAll(false)"
                     >折叠全部</t-button
                   >
+                  <t-button size="small" theme="primary" variant="text" @click="checkDeptAll(true)">全选</t-button>
+                  <t-button size="small" theme="primary" variant="text" @click="checkDeptAll(false)">全不选</t-button>
                 </t-space>
               </div>
               <div class="tree-wrap">
                 <t-tree
                   ref="deptTreeRef"
                   v-model="deptChecked"
-                  :check-strictly="form.deptCheckStrictly"
+                  :check-strictly="!form.deptCheckStrictly"
                   :data="deptTree"
                   :keys="{ label: 'label', value: 'id', children: 'children' }"
                   checkable
                   expand-all
                   hover
+                  value-mode="all"
                 />
               </div>
             </t-form-item>
@@ -230,7 +228,7 @@
 
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -341,15 +339,20 @@ const resetQuery = () => {
   handleQuery();
 };
 
-const handleStatusChange = async (row: RoleVO, v: any) => {
+const handleStatusChange = (row: RoleVO, v: any) => {
   const status = v ? '0' : '1';
-  try {
-    await changeRoleStatus(row.roleId, status);
-    row.status = status;
-    MessagePlugin.success('修改成功');
-  } catch {
-    // 失败保持原状
-  }
+  const text = v ? '启用' : '停用';
+  const dialog = DialogPlugin.confirm({
+    header: '系统提示',
+    body: `确认要"${text}""${row.roleName}"角色吗?`,
+    onConfirm: async () => {
+      dialog.destroy();
+      await changeRoleStatus(row.roleId, status);
+      row.status = status;
+      MessagePlugin.success(`${text}成功`);
+    },
+    onClose: () => dialog.destroy(),
+  });
 };
 
 // ---- 表单 ----
@@ -437,6 +440,50 @@ const collectOwnerChain = (buttonId: string | number): Array<string | number> =>
   return res;
 };
 
+// 收集某节点的祖先链（不含自身）
+const collectAncestors = (id: string | number, pMap: Map<string | number, string | number>) => {
+  const res: Array<string | number> = [];
+  let cur = pMap.get(id);
+  while (cur !== undefined) {
+    res.push(cur);
+    cur = pMap.get(cur);
+  }
+  return res;
+};
+
+/**
+ * 提交的菜单 ids：
+ * - 父子联动：树已勾选节点 + 其祖先（等价 Element 的半选节点）+ 按钮 + 按钮所属菜单链
+ * - 非联动：仅树已勾选节点 + 按钮
+ */
+const collectMenuIds = (): Array<string | number> => {
+  const set = new Set<string | number>([...menuChecked.value, ...buttonChecked]);
+  if (form.menuCheckStrictly) {
+    menuChecked.value.forEach((id) => collectAncestors(id, parentMap.value).forEach((a) => set.add(a)));
+    buttonChecked.forEach((id) => collectOwnerChain(id).forEach((a) => set.add(a)));
+  }
+  return Array.from(set);
+};
+
+// 部门树 父子联动时补齐半选祖先
+const deptParentMap = computed(() => {
+  const map = new Map<string | number, string | number>();
+  const walk = (nodes: any[], parentId?: string | number) =>
+    nodes.forEach((n) => {
+      if (parentId !== undefined) map.set(n.id, parentId);
+      if (n.children?.length) walk(n.children, n.id);
+    });
+  walk(deptTree.value);
+  return map;
+});
+const collectDeptIds = (): Array<string | number> => {
+  const set = new Set<string | number>(deptChecked.value);
+  if (form.deptCheckStrictly) {
+    deptChecked.value.forEach((id) => collectAncestors(id, deptParentMap.value).forEach((a) => set.add(a)));
+  }
+  return Array.from(set);
+};
+
 const initForm = (): RoleForm => ({
   roleId: undefined,
   roleName: '',
@@ -460,11 +507,12 @@ const rules: Record<string, FormRule[]> = {
 };
 
 const dataScopeOptions = [
-  { label: '全部数据', value: '1' },
-  { label: '自定义数据', value: '2' },
-  { label: '本部门数据', value: '3' },
-  { label: '本部门及以下数据', value: '4' },
-  { label: '仅本人数据', value: '5' },
+  { label: '全部数据权限', value: '1' },
+  { label: '自定数据权限', value: '2' },
+  { label: '本部门数据权限', value: '3' },
+  { label: '本部门及以下数据权限', value: '4' },
+  { label: '仅本人数据权限', value: '5' },
+  { label: '部门及以下或本人数据权限', value: '6' },
 ];
 
 const toDeptTreeSelect = (list: DeptVO[]): any[] => {
@@ -515,14 +563,19 @@ const handleUpdate = async (row?: RoleVO) => {
   menuTreeDisplay.value = built.tree;
   buttonPermIds.value = built.buttonIds;
   const checkedKeys = (mres?.data?.checkedKeys ?? []) as Array<string | number>;
-  const menuSel: Array<string | number> = [];
+  const menuSel = new Set<string | number>();
   buttonChecked.clear();
   checkedKeys.forEach((id) => {
-    if (built.buttonIds.has(id)) buttonChecked.add(id);
-    else menuSel.push(id);
+    if (built.buttonIds.has(id)) {
+      buttonChecked.add(id);
+      // 父子联动时后端只回传叶子（按钮），其所属菜单需在树上显示为已勾选
+      const owner = buttonOwner.value.get(id);
+      if (form.menuCheckStrictly && owner !== undefined) menuSel.add(owner);
+    } else {
+      menuSel.add(id);
+    }
   });
-  // 严格模式下展示已选，避免父级联动勾选全部子级
-  menuChecked.value = menuSel;
+  menuChecked.value = Array.from(menuSel);
   // 部门树 + 已选
   const dres = await deptTreeSelect(target.roleId);
   deptTree.value = (dres?.data?.depts ?? []) as any[];
@@ -549,6 +602,9 @@ const expandDeptAll = (expand: boolean) => {
   if (expand) inst?.expandAll?.();
   else inst?.foldAll?.();
 };
+const checkDeptAll = (check: boolean) => {
+  deptChecked.value = check ? collectKeys(deptTree.value, 'id') : [];
+};
 
 const collectKeys = (nodes: any[], key: string): Array<string | number> => {
   const res: Array<string | number> = [];
@@ -571,20 +627,9 @@ const onSubmit = async () => {
   if (valid !== true) return;
   submitting.value = true;
   try {
-    // 菜单 ids = 树中 checked/半选 M/C 节点 + 按钮权限 + 按钮所属菜单链
-    const items = (menuTreeRef.value?.getItems?.() ?? []) as Array<{
-      value: string | number;
-      checked: boolean;
-      indeterminate: boolean;
-    }>;
-    const treeMenuIds = items.filter((n) => n.checked || n.indeterminate).map((n) => n.value);
-    const buttonChainIds: Array<string | number> = [];
-    buttonChecked.forEach((id) => {
-      buttonChainIds.push(...collectOwnerChain(id));
-    });
-    const menuIdSet = new Set<string | number>([...treeMenuIds, ...buttonChainIds, ...buttonChecked]);
-    form.menuIds = Array.from(menuIdSet);
-    form.deptIds = form.dataScope === '2' ? [...deptChecked.value] : [];
+    // 菜单/部门 ids 只从 v-model 状态计算，不依赖树组件实例（标签页切换不会丢数据）
+    form.menuIds = collectMenuIds();
+    form.deptIds = form.dataScope === '2' ? collectDeptIds() : [];
     if (form.roleId) {
       await updateRole(form);
       await updateRolePermission({

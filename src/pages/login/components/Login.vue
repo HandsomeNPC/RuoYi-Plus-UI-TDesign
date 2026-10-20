@@ -60,7 +60,7 @@
       </t-form-item>
 
       <div class="check-container remember-pwd">
-        <t-checkbox v-model="formData.rememberMe">记住密码</t-checkbox>
+        <t-checkbox v-model="formData.rememberMe">记住账号</t-checkbox>
       </div>
     </template>
 
@@ -72,20 +72,16 @@
     <div class="social-panel">
       <span class="social-label">第三方登录</span>
       <div class="social-actions">
-        <t-button shape="circle" theme="default" title="微信" variant="outline" @click="doSocialLogin('wechat')">
-          <template #icon><t-icon name="logo-wechat" /></template>
-        </t-button>
-        <t-button shape="circle" theme="default" title="MaxKey" variant="outline" @click="doSocialLogin('maxkey')">
-          <template #icon><t-icon name="user" /></template>
-        </t-button>
-        <t-button shape="circle" theme="default" title="TopIAM" variant="outline" @click="doSocialLogin('topiam')">
-          <template #icon><t-icon name="user" /></template>
-        </t-button>
-        <t-button shape="circle" theme="default" title="Gitee" variant="outline" @click="doSocialLogin('gitee')">
-          <template #icon><t-icon name="logo-gitee" /></template>
-        </t-button>
-        <t-button shape="circle" theme="default" title="GitHub" variant="outline" @click="doSocialLogin('github')">
-          <template #icon><t-icon name="logo-github" /></template>
+        <t-button
+          v-for="p in SOCIAL_PLATFORMS"
+          :key="p.source"
+          :title="p.label"
+          shape="circle"
+          theme="default"
+          variant="outline"
+          @click="doSocialLogin(p.source)"
+        >
+          <template #icon><svg-icon :icon-class="p.source" /></template>
         </t-button>
       </div>
     </div>
@@ -125,10 +121,26 @@ const FORM_RULES: Record<string, FormRule[]> = {
 
 const type = ref('password');
 
+const SOCIAL_PLATFORMS = [
+  { source: 'wechat', label: '微信' },
+  { source: 'maxkey', label: 'MaxKey' },
+  { source: 'topiam', label: 'TopIam' },
+  { source: 'gitee', label: 'Gitee' },
+  { source: 'github', label: 'GitHub' },
+];
+
 const form = ref<FormInstanceFunctions>();
 const formData = ref({ ...INITIAL_DATA });
 const showPsw = ref(false);
 const loading = ref(false);
+
+// 回填记住的账号
+const rememberedUser = localStorage.getItem('username');
+if (rememberedUser !== null) {
+  formData.value.username = rememberedUser;
+  formData.value.password = '';
+  formData.value.rememberMe = localStorage.getItem('rememberMe') === 'true';
+}
 
 const captchaEnabled = ref(false);
 const codeImg = ref('');
@@ -143,6 +155,7 @@ const getCode = async () => {
     const data = res?.data;
     captchaEnabled.value = !!data?.captchaEnabled;
     if (captchaEnabled.value) {
+      formData.value.code = '';
       codeImg.value = data!.img ? `data:image/gif;base64,${data!.img}` : '';
       formData.value.uuid = data!.uuid ?? '';
     }
@@ -175,6 +188,15 @@ const goRegister = () => {
 const onSubmit = async (ctx: SubmitContext) => {
   if (ctx.validateResult !== true) return;
   loading.value = true;
+  // 记住账号（与原项目一致：只记用户名，不存密码）
+  if (formData.value.rememberMe) {
+    localStorage.setItem('username', String(formData.value.username));
+    localStorage.setItem('rememberMe', 'true');
+  } else {
+    localStorage.removeItem('username');
+    localStorage.removeItem('rememberMe');
+  }
+  localStorage.removeItem('password');
   try {
     await userStore.login({
       ...formData.value,
@@ -182,12 +204,13 @@ const onSubmit = async (ctx: SubmitContext) => {
       grantType: 'password',
     });
     MessagePlugin.success('登录成功');
-    const redirect = route.query.redirect as string;
-    router.push(redirect || '/');
-  } catch (e: unknown) {
-    // 失败后刷新验证码
-    getCode();
-    MessagePlugin.error(e instanceof Error ? e.message : '登录失败');
+    const rawRedirect = (route.query.redirect as string) || '';
+    const redirect = rawRedirect ? decodeURIComponent(rawRedirect) : '/';
+    router.push(redirect);
+  } catch {
+    // 错误提示已由请求拦截器统一弹出，失败后清空并刷新验证码
+    formData.value.code = '';
+    if (captchaEnabled.value) getCode();
   } finally {
     loading.value = false;
   }

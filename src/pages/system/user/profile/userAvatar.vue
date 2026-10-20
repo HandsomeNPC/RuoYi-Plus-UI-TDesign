@@ -78,7 +78,8 @@ import 'vue-cropper/dist/index.css';
 import { AddIcon, MinusIcon, RotateIcon, UploadIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 
-import { uploadAvatar } from '@/api/system/user';
+import { uploadOss } from '@/api/system/oss';
+import { updateUserProfile } from '@/api/system/user';
 
 defineProps<{ img?: string }>();
 const emit = defineEmits<{ (e: 'uploaded', url: string): void }>();
@@ -88,6 +89,7 @@ const cropperVisible = ref(false);
 const cropperRef = ref<any>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
+const fileName = ref('');
 
 const options = reactive({
   img: '',
@@ -131,6 +133,7 @@ const onFileChange = (e: Event) => {
   const reader = new FileReader();
   reader.onload = (ev) => {
     options.img = String(ev.target?.result ?? '');
+    fileName.value = file.name;
   };
   reader.readAsDataURL(file);
   target.value = '';
@@ -154,17 +157,16 @@ const upload = () => {
   uploading.value = true;
   cropperRef.value?.getCropBlob?.(async (blob: Blob) => {
     const formData = new FormData();
-    formData.append('avatarfile', blob, 'avatar.png');
+    formData.append('file', blob, fileName.value || 'avatar.png');
     try {
-      const res = await uploadAvatar(formData);
-      const url = res?.data?.imgUrl;
-      if (url) {
-        emit('uploaded', url);
-        MessagePlugin.success('修改成功');
-        visible.value = false;
-      }
-    } catch {
-      MessagePlugin.error('上传失败');
+      // 与原项目一致：先上传 OSS，再把 ossId 写入个人资料
+      const res = await uploadOss(formData);
+      const uploaded = res?.data;
+      if (!uploaded?.ossId) return;
+      await updateUserProfile({ avatar: uploaded.ossId });
+      emit('uploaded', uploaded.url);
+      MessagePlugin.success('修改成功');
+      visible.value = false;
     } finally {
       uploading.value = false;
     }

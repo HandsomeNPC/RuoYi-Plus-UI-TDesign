@@ -1,4 +1,5 @@
 import type { AxiosPromise } from '@/utils/api-types';
+import { closePush } from '@/utils/push';
 import request from '@/utils/request';
 
 import type { LoginData, LoginResult, RegisterForm, VerifyCodeResult } from './types';
@@ -29,9 +30,19 @@ export function login(data: LoginData): AxiosPromise<LoginResult> {
 }
 
 /**
- * 注销
+ * 注销（同时关闭本地推送连接，并通知后端回收 SSE 连接）
  */
 export function logout() {
+  closePush();
+  if (
+    import.meta.env.VITE_APP_MESSAGE_ENABLED === 'true' &&
+    (import.meta.env.VITE_APP_MESSAGE_TRANSPORT || 'sse').toLowerCase() === 'sse'
+  ) {
+    request({
+      url: (import.meta.env.VITE_APP_MESSAGE_PATH || '/resource/message') + '/close',
+      method: 'get',
+    }).catch(() => {});
+  }
   return request({
     url: '/auth/logout',
     method: 'post',

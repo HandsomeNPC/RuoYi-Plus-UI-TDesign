@@ -306,6 +306,50 @@ export function download(url: string, params: any, fileName: string) {
     });
 }
 
+/** GET 方式下载二进制流（对应原项目 plugins/download.ts 的 zip / oss） */
+async function downloadGetBlob(url: string, resolveName: (headers: Record<string, any>) => string, type?: string) {
+  const loading = LoadingPlugin({
+    fullscreen: true,
+    attach: 'body',
+    text: '正在下载数据，请稍候',
+    showOverlay: true,
+  });
+  try {
+    // 直接用 axios，避免 service 拦截器把 GET params 拼接逻辑和 envelope 处理套在 blob 上
+    const res = await axios({
+      method: 'get',
+      url: import.meta.env.VITE_APP_BASE_API + url,
+      responseType: 'blob',
+      headers: { ...globalHeaders(), 'Content-Language': getLanguage() },
+    });
+    if (blobValidate(res.data)) {
+      saveBlob(new Blob([res.data], type ? { type } : undefined), resolveName(res.headers));
+    } else {
+      const rspObj = JSON.parse(await (res.data as Blob).text());
+      MessagePlugin.error(errorCode[rspObj.code] || rspObj.msg || errorCode['default']);
+    }
+  } catch (e) {
+    console.error(e);
+    MessagePlugin.error((await extractErrorMessage(e)) || '下载文件出现错误，请联系管理员！');
+  } finally {
+    loading.hide();
+  }
+}
+
+/** 下载 zip（代码生成） */
+export function downloadZip(url: string, name: string) {
+  return downloadGetBlob(url, () => name, 'application/zip');
+}
+
+/** 下载 OSS 文件（保留原文件名，走后端下载接口以计入权限与日志） */
+export function downloadOss(ossId: string | number) {
+  return downloadGetBlob(
+    `/resource/oss/download/${ossId}`,
+    (headers) => decodeURIComponent(String(headers['download-filename'] ?? ossId)),
+    'application/octet-stream',
+  );
+}
+
 // 导出若依风格的 axios 实例为默认导出（原项目 src/api/* 均以 `import request from '@/utils/request'` 使用）
 export default service;
 

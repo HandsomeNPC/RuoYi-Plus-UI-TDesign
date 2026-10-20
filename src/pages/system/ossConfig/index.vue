@@ -11,7 +11,7 @@
           ><t-input v-model="queryParams.bucketName" clearable placeholder="桶名称"
         /></t-form-item>
         <t-form-item label="状态" name="status"
-          ><dict-select v-model="queryParams.status" placeholder="状态" style="width: 140px" type="sys_normal_disable"
+          ><dict-select v-model="queryParams.status" placeholder="状态" style="width: 140px" type="sys_yes_no"
         /></t-form-item>
         <t-form-item :style="{ marginLeft: 'auto' }">
           <t-space>
@@ -60,7 +60,7 @@
         @page-change="onPageChange"
       >
         <template #status="{ row }">
-          <t-switch :value="row.status === '0'" @change="(v: any) => handleStatusChange(row, v)" />
+          <t-switch :value="row.status === 'Y'" @change="(v: any) => handleStatusChange(row, v)" />
         </template>
         <template #accessPolicy="{ row }">
           <t-tag v-if="row.accessPolicy === '0'" theme="warning" variant="light">private</t-tag>
@@ -147,7 +147,7 @@
           >
         </t-row>
         <t-form-item label="状态" name="status"
-          ><dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable"
+          ><dict-select v-model="form.status" placeholder="请选择" type="sys_yes_no"
         /></t-form-item>
         <t-form-item label="备注" name="remark"
           ><t-textarea v-model="form.remark" :autosize="{ minRows: 2 }" placeholder="请输入备注"
@@ -175,7 +175,7 @@ import { useDict } from '@/utils/dict';
 
 defineOptions({ name: 'SystemOssConfig' });
 
-const { sys_normal_disable, sys_yes_no } = useDict('sys_normal_disable', 'sys_yes_no');
+const { sys_yes_no } = useDict('sys_yes_no');
 
 const list = ref<OssConfigVO[]>([]);
 const loading = ref(false);
@@ -236,11 +236,13 @@ const resetQuery = () => {
 };
 
 const handleStatusChange = async (row: OssConfigVO, v: any) => {
-  const status = v ? '0' : '1';
+  // 后端 status 语义是「是否默认」，取值 Y/N；切换会先清空其他默认再设当前
+  const status = v ? 'Y' : 'N';
   try {
     await changeOssConfigStatus(row.ossConfigId, status, row.configKey);
     row.status = status;
     MessagePlugin.success('修改成功');
+    getList();
   } catch {
     /* ignore */
   }
@@ -262,7 +264,7 @@ const initForm = (): OssConfigForm => ({
   isHttps: 'N',
   accessPolicy: '1',
   region: '',
-  status: '0',
+  status: 'N',
   remark: '',
 });
 const form = reactive<OssConfigForm>(initForm());
@@ -271,6 +273,8 @@ const rules: Record<string, FormRule[]> = {
   endpoint: [{ required: true, message: 'endpoint不能为空', type: 'error' }],
   bucketName: [{ required: true, message: '请输入桶名称', type: 'error' }],
   accessPolicy: [{ required: true, message: 'accessPolicy不能为空', type: 'error' }],
+  accessKey: [{ required: true, message: 'accessKey不能为空', type: 'error' }],
+  secretKey: [{ required: true, message: 'secretKey不能为空', type: 'error' }],
 };
 
 const handleAdd = () => {

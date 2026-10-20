@@ -64,7 +64,7 @@
 
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, SubmitContext } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -75,12 +75,16 @@ defineOptions({ name: 'RegisterIndex' });
 
 const router = useRouter();
 
-const INITIAL = { username: '', password: '', confirmPassword: '', code: '', uuid: '', userType: '00' };
+const INITIAL = { username: '', password: '', confirmPassword: '', code: '', uuid: '', userType: 'sys_user' };
 const FORM_RULES: Record<string, FormRule[]> = {
-  username: [{ required: true, message: '请输入账号', type: 'error' }],
+  username: [
+    { required: true, message: '请输入账号', type: 'error' },
+    { min: 2, max: 20, message: '账号长度必须介于 2 和 20 之间', type: 'error' },
+  ],
   password: [
     { required: true, message: '请输入密码', type: 'error' },
-    { min: 5, message: '密码长度不能少于5位', type: 'error' },
+    { min: 5, max: 20, message: '密码长度必须介于 5 和 20 之间', type: 'error' },
+    { pattern: /^[^<>"'|\\]+$/, message: '不能包含非法字符：< > " \' \\ |', type: 'error' },
   ],
   confirmPassword: [
     { required: true, message: '请再次输入密码', type: 'error' },
@@ -116,11 +120,23 @@ const onSubmit = async (ctx: SubmitContext) => {
   loading.value = true;
   try {
     await register(formData.value);
-    MessagePlugin.success('注册成功');
-    goLogin();
-  } catch (e: unknown) {
-    getCode();
-    MessagePlugin.error(e instanceof Error ? e.message : '注册失败');
+    const dialog = DialogPlugin.alert({
+      header: '系统提示',
+      theme: 'success',
+      body: `恭喜你，您的账号 ${formData.value.username} 注册成功！`,
+      onConfirm: () => {
+        dialog.destroy();
+        goLogin();
+      },
+      onClose: () => {
+        dialog.destroy();
+        goLogin();
+      },
+    });
+  } catch {
+    // 错误提示已由请求拦截器统一弹出
+    formData.value.code = '';
+    if (captchaEnabled.value) getCode();
   } finally {
     loading.value = false;
   }

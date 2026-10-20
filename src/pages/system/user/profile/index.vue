@@ -1,13 +1,40 @@
 <template>
-  <div v-if="form.userName" class="profile-page">
+  <div v-if="profileLoaded" class="profile-page">
     <t-row :gutter="16">
       <t-col :lg="3" :xs="12">
         <t-card :bordered="false">
           <div class="user-center">
             <user-avatar :img="avatarUrl" @uploaded="onAvatarUploaded" />
             <div class="user-name">{{ form.nickName || form.userName }}</div>
-            <div class="user-role">{{ roleGroup || '—' }}</div>
           </div>
+          <ul class="info-list">
+            <li>
+              <span class="info-label"><svg-icon icon-class="user" />用户名称</span>
+              <span class="info-value">{{ profileUser.userName || '-' }}</span>
+            </li>
+            <li>
+              <span class="info-label"><svg-icon icon-class="phone" />手机号码</span>
+              <span class="info-value">{{ profileUser.phoneNumber || '-' }}</span>
+            </li>
+            <li>
+              <span class="info-label"><svg-icon icon-class="email" />用户邮箱</span>
+              <span class="info-value">{{ profileUser.email || '-' }}</span>
+            </li>
+            <li>
+              <span class="info-label"><svg-icon icon-class="tree" />所属部门</span>
+              <span class="info-value">
+                {{ profileUser.deptName ? `${profileUser.deptName}${postGroup ? ' / ' + postGroup : ''}` : '-' }}
+              </span>
+            </li>
+            <li>
+              <span class="info-label"><svg-icon icon-class="peoples" />所属角色</span>
+              <span class="info-value">{{ roleGroup || '-' }}</span>
+            </li>
+            <li>
+              <span class="info-label"><svg-icon icon-class="date" />创建日期</span>
+              <span class="info-value">{{ profileUser.createTime || '-' }}</span>
+            </li>
+          </ul>
         </t-card>
       </t-col>
       <t-col :lg="9" :xs="12">
@@ -90,9 +117,17 @@
                 </template>
               </t-table>
               <div style="margin-top: 12px">
-                <t-space>
-                  <t-button theme="primary" variant="outline" @click="bindSocial('gitee')">绑定 Gitee</t-button>
-                  <t-button theme="primary" variant="outline" @click="bindSocial('dingtalk')">绑定 钉钉</t-button>
+                <t-space break-line>
+                  <t-button
+                    v-for="p in SOCIAL_PLATFORMS"
+                    :key="p.source"
+                    theme="primary"
+                    variant="outline"
+                    @click="bindSocial(p.source)"
+                  >
+                    <template #icon><svg-icon :icon-class="p.source" style="margin-right: 4px" /></template>绑定
+                    {{ p.label }}
+                  </t-button>
                 </t-space>
               </div>
             </t-tab-panel>
@@ -108,7 +143,7 @@ import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { reactive, ref } from 'vue';
 
-import type { UserProfileForm } from '@/api/system/user/types';
+import type { UserProfileForm, UserVO } from '@/api/system/user/types';
 import { getUserProfile, updateUserProfile, updateUserPwd } from '@/api/system/user';
 import { useUserStore } from '@/store';
 import { useDict } from '@/utils/dict';
@@ -121,7 +156,11 @@ const { sys_user_gender } = useDict('sys_user_gender');
 
 const activeTab = ref('base');
 const roleGroup = ref('');
+const postGroup = ref('');
+const profileUser = ref<Partial<UserVO>>({});
+const profileLoaded = ref(false);
 const form = reactive<UserProfileForm>({
+  userName: '',
   nickName: '',
   phoneNumber: '',
   email: '',
@@ -133,6 +172,14 @@ const profileFormRef = ref<FormInstanceFunctions>();
 const saving = ref(false);
 const rules: Record<string, FormRule[]> = {
   nickName: [{ required: true, message: '请输入昵称', type: 'error' }],
+  email: [
+    { required: true, message: '邮箱地址不能为空', type: 'error' },
+    { email: true, message: '请输入正确的邮箱地址', type: 'error' },
+  ],
+  phoneNumber: [
+    { required: true, message: '手机号码不能为空', type: 'error' },
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', type: 'error' },
+  ],
 };
 
 const loadProfile = async () => {
@@ -140,16 +187,19 @@ const loadProfile = async () => {
   const data = res?.data;
   if (data?.user) {
     const u = data.user;
+    form.userName = u.userName;
     form.nickName = u.nickName;
     form.phoneNumber = u.phoneNumber;
     form.email = u.email;
     form.gender = u.gender;
     avatarUrl.value = u.avatarUrl ?? '';
     roleGroup.value = data.roleGroup ?? '';
-    // 同步顶部用户名
+    postGroup.value = data.postGroup ?? '';
+    profileUser.value = u;
     userStore.name = u.userName;
     userStore.nickname = u.nickName;
     userStore.avatar = u.avatarUrl ?? '';
+    profileLoaded.value = true;
   }
 };
 
@@ -174,6 +224,8 @@ const pwdRules: Record<string, FormRule[]> = {
   oldPassword: [{ required: true, message: '请输入旧密码', type: 'error' }],
   newPassword: [
     { required: true, message: '请输入新密码', type: 'error' },
+    { min: 6, max: 20, message: '长度在 6 到 20 个字符', type: 'error' },
+    { pattern: /^[^<>"'|\\]+$/, message: '不能包含非法字符：< > " \' \\ |', type: 'error' },
     { validator: (val) => val !== pwdForm.oldPassword, message: '新密码不能与旧密码相同', type: 'error' },
   ],
   confirmPassword: [
@@ -232,7 +284,7 @@ const loadOnline = async () => {
   deviceLoading.value = true;
   try {
     const res = await getOnline();
-    onlineDevices.value = (res?.data ?? []) as OnlineVO[];
+    onlineDevices.value = (res?.data?.rows ?? []) as OnlineVO[];
   } finally {
     deviceLoading.value = false;
   }
@@ -246,6 +298,13 @@ const handleDelOnline = async (row: OnlineVO) => {
 // ---- 第三方账号 ----
 const socialList = ref<any[]>([]);
 const socialLoading = ref(false);
+const SOCIAL_PLATFORMS = [
+  { source: 'wechat', label: '微信' },
+  { source: 'maxkey', label: 'MaxKey' },
+  { source: 'topiam', label: 'TopIam' },
+  { source: 'gitee', label: 'Gitee' },
+  { source: 'github', label: 'GitHub' },
+];
 const socialColumns: PrimaryTableCol[] = [
   { colKey: 'source', title: '平台', width: 140 },
   { colKey: 'userName', title: '账号', width: 200, ellipsis: true },
@@ -261,7 +320,7 @@ const loadSocial = async () => {
   }
 };
 const handleUnlock = async (row: any) => {
-  await authUnlock(row.authId);
+  await authUnlock(row.id);
   MessagePlugin.success('解绑成功');
   loadSocial();
 };
@@ -317,6 +376,35 @@ loadSocial();
 }
 .user-role {
   color: var(--td-text-color-secondary);
+}
+.info-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    font-size: 13px;
+    border-top: 1px solid var(--td-component-stroke);
+  }
+  li:last-child {
+    border-bottom: 1px solid var(--td-component-stroke);
+  }
+}
+.info-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+  flex-shrink: 0;
+}
+.info-value {
+  text-align: right;
+  color: var(--td-text-color-secondary);
+  word-break: break-word;
 }
 .profile-form {
   max-width: 520px;

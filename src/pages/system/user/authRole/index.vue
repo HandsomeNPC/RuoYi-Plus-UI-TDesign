@@ -29,7 +29,11 @@
         <template #status="{ row }"><dict-tag :options="sys_normal_disable" :value="row.status" /></template>
         <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
         <template #check="{ row }">
-          <t-checkbox :value="checkedKeys.includes(row.roleId)" @change="(v: any) => toggleRole(row.roleId, v)" />
+          <t-checkbox
+            :disabled="!checkSelectable(row)"
+            :value="checkedKeys.includes(row.roleId)"
+            @change="(v: any) => toggleRole(row.roleId, v)"
+          />
         </template>
       </t-table>
     </t-card>
@@ -84,12 +88,15 @@ const load = async () => {
     const d = res?.data;
     user.value = d?.user ?? null;
     roles.value = d?.roles ?? [];
-    // 后端返回的 user.roleIds 为已选角色
-    checkedKeys.value = (d?.user?.roleIds ?? []) as Array<string | number>;
+    // 后端在 roles[].flag 上标记该用户已拥有的角色（user.roleIds 不会被填充）
+    checkedKeys.value = roles.value.filter((r) => r.flag).map((r) => r.roleId);
   } finally {
     loading.value = false;
   }
 };
+
+/** 停用角色不可分配 */
+const checkSelectable = (row: RoleVO) => row.status === '0';
 
 const toggleRole = (roleId: string | number, v: any) => {
   if (v) {

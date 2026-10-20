@@ -54,16 +54,6 @@ export const synchDb = (tableId: string | number) => {
   return request({ url: '/tool/gen/synchDb/' + tableId, method: 'get' });
 };
 
-// 生成代码
-export const genCode = (tableName: string) => {
-  return request({ url: '/tool/gen/genCode/' + tableName, method: 'get' });
-};
-
-// 批量生成代码
-export const batchGenCode = (tables: string) => {
-  return request({ url: '/tool/gen/batchGenCode?tables=' + tables, method: 'get' });
-};
-
 // 获取数据源名称列表
 export const getDataNames = (): AxiosPromise<string[]> => {
   return request({ url: '/tool/gen/getDataNames', method: 'get' });

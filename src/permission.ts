@@ -52,8 +52,8 @@ router.beforeEach(async (to, _from) => {
         filterExternalRoutes(accessRoutes).forEach((route) => {
           router.addRoute(route);
         });
-        // hack：确保 addRoute 完成后重新匹配
-        return { path: to.fullPath, replace: true };
+        // hack：确保 addRoute 完成后重新匹配，分开传 path/query/hash 避免 fullPath 字符串丢参数
+        return { path: to.path, query: to.query, hash: to.hash, replace: true };
       }
 
       return true;
@@ -65,7 +65,7 @@ router.beforeEach(async (to, _from) => {
       closePush();
       await useUserStore().logout();
       NProgress.done();
-      return { path: '/login', query: { redirect: to.fullPath } };
+      return { path: '/login', query: { redirect: encodeURIComponent(to.fullPath || '/') } };
     }
   }
 

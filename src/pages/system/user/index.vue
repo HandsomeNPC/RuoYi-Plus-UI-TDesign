@@ -17,6 +17,7 @@
           <div class="dept-tree-wrap">
             <t-tree
               ref="deptTreeRef"
+              v-model:actived="deptActived"
               :data="filteredDeptTree"
               :keys="{ label: 'label', value: 'id', children: 'children' }"
               activable
@@ -90,7 +91,7 @@
               ><template #icon><upload-icon /></template>导入</t-button
             >
             <t-button
-              v-hasPermi="['system:user:unlock']"
+              v-hasPermi="['system:user:edit']"
               :disabled="single"
               theme="default"
               variant="outline"
@@ -139,28 +140,24 @@
                 <t-link v-hasPermi="['system:user:query']" hover="color" theme="primary" @click="handleView(row)"
                   >详细</t-link
                 >
-                <t-link v-hasPermi="['system:user:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
-                  >修改</t-link
-                >
-                <t-link
-                  v-if="!isSuperAdmin(row.userId)"
-                  v-hasPermi="['system:user:edit']"
-                  hover="color"
-                  theme="primary"
-                  @click="handleAuthRole(row)"
-                  >分配角色</t-link
-                >
-                <t-link
-                  v-if="!isSuperAdmin(row.userId)"
-                  v-hasPermi="['system:user:resetPwd']"
-                  hover="color"
-                  theme="primary"
-                  @click="handleResetPwd(row)"
-                  >重置密码</t-link
-                >
-                <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
-                  <t-link v-hasPermi="['system:user:remove']" hover="color" theme="danger">删除</t-link>
-                </t-popconfirm>
+                <template v-if="!isSuperAdmin(row.userId)">
+                  <t-link v-hasPermi="['system:user:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
+                    >修改</t-link
+                  >
+                  <t-link v-hasPermi="['system:user:edit']" hover="color" theme="primary" @click="handleAuthRole(row)"
+                    >分配角色</t-link
+                  >
+                  <t-link
+                    v-hasPermi="['system:user:resetPwd']"
+                    hover="color"
+                    theme="primary"
+                    @click="handleResetPwd(row)"
+                    >重置密码</t-link
+                  >
+                  <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
+                    <t-link v-hasPermi="['system:user:remove']" hover="color" theme="danger">删除</t-link>
+                  </t-popconfirm>
+                </template>
               </t-space>
             </template>
           </t-table>
@@ -299,8 +296,8 @@
         <t-descriptions-item label="性别">
           <dict-tag :options="sys_user_gender" :value="viewData.gender" />
         </t-descriptions-item>
-        <t-descriptions-item label="岗位">{{ viewInfo?.postGroup || '-' }}</t-descriptions-item>
-        <t-descriptions-item :span="2" label="角色">{{ viewInfo?.roleGroup || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="岗位">{{ viewPostNames || '-' }}</t-descriptions-item>
+        <t-descriptions-item :span="2" label="角色">{{ viewRoleNames || '-' }}</t-descriptions-item>
         <t-descriptions-item label="创建时间">{{ parseTime(viewData.createTime) }}</t-descriptions-item>
         <t-descriptions-item label="最后登录">{{ parseTime(viewData.loginDate) }}</t-descriptions-item>
         <t-descriptions-item label="最后登录IP">{{ viewData.loginIp || '-' }}</t-descriptions-item>
@@ -433,13 +430,21 @@ const loadDeptTree = async () => {
   const res = await deptTreeSelect();
   const data = (res?.data ?? []) as any[];
   deptTreeData.value = data;
-  deptOptions.value = data;
+  // 表单中的归属部门不可选择停用部门（返回独立新树，避免污染左侧完整部门树）
+  deptOptions.value = filterDisabledDept(data);
   // 默认全部展开
   await nextTick();
   deptTreeRef.value?.expandAll?.();
 };
 
+const filterDisabledDept = (nodes: any[]): any[] =>
+  nodes
+    .filter((n) => !n.disabled)
+    .map((n) => ({ ...n, children: n.children?.length ? filterDisabledDept(n.children) : undefined }));
+
+const deptActived = ref<Array<string | number>>([]);
 const onDeptActive = (vals: Array<string | number>) => {
+  deptActived.value = vals ?? [];
   queryParams.deptId = vals?.[0];
   queryParams.pageNum = 1;
   getList();
@@ -478,6 +483,7 @@ const resetQuery = () => {
   queryParams.phoneNumber = '';
   queryParams.status = '';
   queryParams.deptId = undefined;
+  deptActived.value = [];
   resetDateRange();
   handleQuery();
 };
@@ -540,35 +546,30 @@ const form = reactive<UserForm>(initForm());
 const rules: Record<string, FormRule[]> = {
   userName: [
     { required: true, message: '请输入用户名称', type: 'error' },
-    { len: 2, message: '用户名称长度必须介于 2 和 20 之间', type: 'error' },
-    {
-      validator: (val) => /^[A-Za-z0-9_一-龥]{2,20}$/.test(val),
-      message: '用户名称只能包含中文、字母、数字、下划线',
-      type: 'error',
-    },
+    { min: 2, max: 20, message: '用户名称长度必须介于 2 和 20 之间', type: 'error' },
   ],
   nickName: [{ required: true, message: '请输入昵称', type: 'error' }],
   password: [
     { required: true, message: '请输入密码', type: 'error' },
-    {
-      validator: (val) => /^[A-Za-z0-9@#$%^&*_+\-=!]{5,20}$/.test(val),
-      message: '密码长度 5-20 位且不含非法字符',
-      type: 'error',
-    },
+    { min: 5, max: 20, message: '用户密码长度必须介于 5 和 20 之间', type: 'error' },
+    { pattern: /^[^<>"'|\\]+$/, message: '不能包含非法字符：< > " \' \\ |', type: 'error' },
   ],
-  email: [{ pattern: /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/, message: '请输入正确的邮箱', type: 'warning' }],
-  phoneNumber: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', type: 'warning' }],
+  email: [{ email: true, message: '请输入正确的邮箱地址', type: 'error' }],
+  phoneNumber: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', type: 'error' }],
   deptId: [{ required: true, message: '请选择归属部门', type: 'error' }],
+  roleIds: [{ required: true, message: '用户角色不能为空', type: 'error' }],
 };
 
-const toRoleOptions = (roles: any[]) => (roles ?? []).map((r) => ({ label: r.roleName, value: r.roleId }));
-const toPostOptions = (posts: any[]) => (posts ?? []).map((p) => ({ label: p.postName, value: p.postId }));
+const toRoleOptions = (roles: any[]) =>
+  (roles ?? []).map((r) => ({ label: r.roleName, value: r.roleId, disabled: r.status === '1' }));
+const toPostOptions = (posts: any[]) =>
+  (posts ?? []).map((p) => ({ label: p.postName, value: p.postId, disabled: p.status === '1' }));
 
-// 切换归属部门时按部门重新加载岗位（原项目 optionselect(deptId)）
+// 切换归属部门时按部门重新加载岗位（原项目 optionselect(deptId)），并清空已选岗位
 const onFormDeptChange = async (val: any) => {
-  const deptId = val;
+  form.postIds = [];
   try {
-    const pr = await postOptionSelect(deptId);
+    const pr = await postOptionSelect(val);
     postOptions.value = toPostOptions(pr?.data ?? []);
   } catch {
     /* ignore */
@@ -666,8 +667,9 @@ const handleResetPwd = (row: UserVO) => {
   pwdDialogVisible.value = true;
 };
 const onResetPwd = async () => {
-  if (!/^[A-Za-z0-9@#$%^&*_+\-=!]{5,20}$/.test(pwdForm.password)) {
-    MessagePlugin.warning('密码长度 5-20 位且不含非法字符');
+  const pwd = pwdForm.password;
+  if (pwd.length < 5 || pwd.length > 20 || !/^[^<>"'|\\]+$/.test(pwd)) {
+    MessagePlugin.warning('用户密码长度必须介于 5 和 20 之间，且不能包含非法字符：< > " \' \\ |');
     return;
   }
   resettingPwd.value = true;
@@ -684,6 +686,16 @@ const onResetPwd = async () => {
 const viewVisible = ref(false);
 const viewData = ref<UserVO | null>(null);
 const viewInfo = ref<any>(null);
+// getUser 返回 posts/roles 全集 + postIds/roleIds 已选，按 id 匹配名称（同原 view.vue）
+const pickNames = (list: any[] | undefined, ids: any[] | undefined, idKey: string, nameKey: string) => {
+  const sel = new Set((ids ?? []).map(String));
+  return (list ?? [])
+    .filter((x) => sel.has(String(x[idKey])))
+    .map((x) => x[nameKey])
+    .join('、');
+};
+const viewPostNames = computed(() => pickNames(viewInfo.value?.posts, viewInfo.value?.postIds, 'postId', 'postName'));
+const viewRoleNames = computed(() => pickNames(viewInfo.value?.roles, viewInfo.value?.roleIds, 'roleId', 'roleName'));
 const handleView = async (row: UserVO) => {
   const res = await getUser(row.userId);
   viewInfo.value = res?.data ?? null;

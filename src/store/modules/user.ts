@@ -5,6 +5,9 @@ import type { LoginData } from '@/api/types';
 import { getInfo as getInfoApi, login as loginApi, logout as logoutApi } from '@/api/login';
 import { getToken, removeToken, setToken } from '@/utils/auth';
 
+import { getPermissionStore } from './permission';
+import { getTabsRouterStore } from './tabs-router';
+
 /**
  * 用户信息（与原项目 user store 字段一致）
  */
@@ -61,7 +64,8 @@ export const useUserStore = defineStore('user', () => {
   };
 
   /**
-   * 注销
+   * 注销：清理 token、用户信息，以及上一个账号的动态路由与多标签页
+   * （登录走 router.push 不刷新页面，不清理会导致切换账号后侧边栏/路由残留）
    */
   const logout = async (): Promise<void> => {
     try {
@@ -73,9 +77,12 @@ export const useUserStore = defineStore('user', () => {
     name.value = '';
     nickname.value = '';
     avatar.value = '';
+    userId.value = '';
     roles.value = [];
     permissions.value = [];
     removeToken();
+    await getPermissionStore().restoreRoutes();
+    getTabsRouterStore().removeTabRouterList();
   };
 
   const setAvatar = (value: string) => {

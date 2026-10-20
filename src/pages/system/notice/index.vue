@@ -99,7 +99,7 @@
           <t-descriptions-item label="创建人">{{ detailData.createByName || '-' }}</t-descriptions-item>
           <t-descriptions-item label="创建时间">{{ parseTime(detailData.createTime) }}</t-descriptions-item>
         </t-descriptions>
-        <div class="notice-detail-content" v-html="detailData.noticeContent || ''"></div>
+        <div class="notice-detail-content" v-html="safeNoticeContent"></div>
       </div>
     </t-drawer>
 
@@ -139,14 +139,20 @@
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DeleteIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import type { NoticeForm, NoticeQuery, NoticeVO } from '@/api/system/notice/types';
-import { addNotice, delNotice, listNotice, updateNotice } from '@/api/system/notice';
+import { addNotice, delNotice, getNotice, listNotice, updateNotice } from '@/api/system/notice';
 import { useDict } from '@/utils/dict';
+import { resolveOssContent } from '@/utils/ossContent';
 import { parseTime } from '@/utils/ruoyi';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 defineOptions({ name: 'SystemNotice' });
+
+const route = useRoute();
+const router = useRouter();
 
 const { sys_notice_type, sys_notice_status } = useDict('sys_notice_type', 'sys_notice_status');
 
@@ -243,17 +249,20 @@ const handleAdd = () => {
   dialogTitle.value = '新增公告';
   dialogVisible.value = true;
 };
-const handleUpdate = (row?: NoticeVO) => {
+const handleUpdate = async (row?: NoticeVO) => {
   const t = row ?? selectedRows.value[0];
   if (!t) return;
+  // 列表行不保证带完整正文，走详情接口取最新数据
+  const res = await getNotice(t.noticeId);
+  const d = res?.data ?? t;
   Object.assign(form, initForm(), {
-    noticeId: t.noticeId,
-    noticeTitle: t.noticeTitle,
-    noticeType: t.noticeType,
-    noticeContent: t.noticeContent,
-    status: t.status,
-    remark: t.remark,
-    createByName: t.createByName,
+    noticeId: d.noticeId,
+    noticeTitle: d.noticeTitle,
+    noticeType: d.noticeType,
+    noticeContent: await resolveOssContent(d.noticeContent ?? ''),
+    status: d.status,
+    remark: d.remark,
+    createByName: d.createByName,
   });
   dialogTitle.value = '修改公告';
   dialogVisible.value = true;
@@ -289,10 +298,27 @@ const handleDelete = async (row?: NoticeVO) => {
 // ---- 公告详情 ----
 const detailVisible = ref(false);
 const detailData = ref<NoticeVO | null>(null);
-const handleDetail = (row: NoticeVO) => {
-  detailData.value = row;
+const safeNoticeContent = computed(() => sanitizeHtml(detailData.value?.noticeContent || ''));
+const openDetail = async (noticeId: string | number) => {
+  const res = await getNotice(noticeId);
+  const d = res?.data;
+  if (!d) return;
+  d.noticeContent = await resolveOssContent(d.noticeContent ?? '');
+  detailData.value = d;
   detailVisible.value = true;
 };
+const handleDetail = (row: NoticeVO) => openDetail(row.noticeId);
+
+// 通知铃等入口通过 ?noticeId= 跳转过来时自动打开详情，随后清除该参数
+watch(
+  () => route.query.noticeId,
+  async (noticeId) => {
+    if (!noticeId) return;
+    await openDetail(String(noticeId));
+    router.replace({ query: { ...route.query, noticeId: undefined } });
+  },
+  { immediate: true },
+);
 
 getList();
 </script>

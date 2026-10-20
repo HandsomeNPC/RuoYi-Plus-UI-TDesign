@@ -31,17 +31,30 @@
       </t-form>
 
       <div class="toolbar">
-        <t-button v-hasPermi="['tool:gen:import']" theme="primary" @click="openImport"
-          ><template #icon><add-icon /></template>导入表</t-button
-        >
         <t-button
           v-hasPermi="['tool:gen:code']"
           :disabled="!selectedRows.length"
+          theme="primary"
+          variant="outline"
+          @click="handleGenTable()"
+          ><template #icon><download-icon /></template>生成</t-button
+        >
+        <t-button v-hasPermi="['tool:gen:import']" theme="primary" @click="openImport"
+          ><template #icon><upload-icon /></template>导入</t-button
+        >
+        <t-button
+          v-hasPermi="['tool:gen:edit']"
+          :disabled="selectedRows.length !== 1"
           theme="success"
           variant="outline"
-          @click="handleBatchGen"
-          ><template #icon><download-icon /></template>批量生成</t-button
+          @click="handleEdit(selectedRows[0])"
+          ><template #icon><edit-icon /></template>修改</t-button
         >
+        <t-popconfirm content="是否确认删除选中的表数据?" @confirm="handleDelete()">
+          <t-button v-hasPermi="['tool:gen:remove']" :disabled="!selectedRows.length" theme="danger" variant="outline"
+            ><template #icon><delete-icon /></template>删除</t-button
+          >
+        </t-popconfirm>
         <right-toolbar
           v-model:show-search="showSearch"
           :columns="columns"
@@ -64,16 +77,18 @@
         @page-change="onPageChange"
       >
         <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
+        <template #updateTime="{ row }">{{ parseTime(row.updateTime) }}</template>
         <template #operation="{ row }">
           <t-space :breakLine="false" size="small">
             <t-link v-hasPermi="['tool:gen:preview']" hover="color" theme="primary" @click="handlePreview(row)"
               >预览</t-link
             >
-            <t-link v-hasPermi="['tool:gen:code']" hover="color" theme="primary" @click="handleGen(row)">生成</t-link>
-            <t-link v-hasPermi="['tool:gen:edit']" hover="color" theme="primary" @click="handleEdit(row)">配置</t-link>
-            <t-link v-hasPermi="['tool:gen:edit']" hover="color" theme="primary" @click="handleSync(row)">同步</t-link>
-            <t-link v-hasPermi="['tool:gen:remove']" hover="color" theme="primary" @click="handleDownload(row)"
-              >下载</t-link
+            <t-link v-hasPermi="['tool:gen:edit']" hover="color" theme="primary" @click="handleEdit(row)">编辑</t-link>
+            <t-popconfirm :content="`确认要强制同步&quot;${row.tableName}&quot;表结构吗？`" @confirm="handleSync(row)">
+              <t-link v-hasPermi="['tool:gen:edit']" hover="color" theme="primary">同步</t-link>
+            </t-popconfirm>
+            <t-link v-hasPermi="['tool:gen:code']" hover="color" theme="primary" @click="handleGenTable(row)"
+              >生成代码</t-link
             >
             <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
               <t-link v-hasPermi="['tool:gen:remove']" hover="color" theme="danger">删除</t-link>
@@ -116,11 +131,17 @@
     </t-dialog>
 
     <!-- 预览代码 -->
-    <t-drawer v-model:visible="previewVisible" header="预览代码" size="55%">
-      <div class="preview-body">
-        <t-select v-model="currentFile" :options="fileOptions" style="margin-bottom: 8px" />
-        <pre class="code-block">{{ previewFiles[currentFile] || '' }}</pre>
-      </div>
+    <t-drawer v-model:visible="previewVisible" :footer="false" header="代码预览" size="60%">
+      <t-tabs v-model="currentFile">
+        <t-tab-panel v-for="f in fileOptions" :key="f.value" :label="f.label" :value="f.value">
+          <div class="code-toolbar">
+            <t-link hover="color" theme="primary" @click="copyCode(previewFiles[f.value])">
+              <template #prefix-icon><file-copy-icon /></template>复制
+            </t-link>
+          </div>
+          <pre class="code-block">{{ previewFiles[f.value] || '' }}</pre>
+        </t-tab-panel>
+      </t-tabs>
     </t-drawer>
 
     <!-- 配置编辑（3 栏：基本/字段/生成） -->
@@ -133,94 +154,131 @@
     >
       <t-tabs v-model="editTab">
         <!-- 基本信息 -->
-        <t-tab-panel label="基本信息" value="basic">
-          <t-form :data="editForm" label-width="120px">
+        <t-tab-panel :destroy-on-hide="false" label="基本信息" value="basic">
+          <t-form ref="basicFormRef" :data="editForm" :rules="basicRules" label-width="120px">
             <t-row>
               <t-col :span="6"
-                ><t-form-item label="表名称"><t-input v-model="editForm.tableName" /></t-form-item
+                ><t-form-item label="表名称" name="tableName"><t-input v-model="editForm.tableName" /></t-form-item
               ></t-col>
               <t-col :span="6"
-                ><t-form-item label="表描述"><t-input v-model="editForm.tableComment" /></t-form-item
+                ><t-form-item label="表描述" name="tableComment"
+                  ><t-input v-model="editForm.tableComment" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
               <t-col :span="6"
-                ><t-form-item label="实体类名称"><t-input v-model="editForm.className" /></t-form-item
+                ><t-form-item label="实体类名称" name="className"><t-input v-model="editForm.className" /></t-form-item
               ></t-col>
               <t-col :span="6"
-                ><t-form-item label="作者"><t-input v-model="editForm.functionAuthor" /></t-form-item
+                ><t-form-item label="作者" name="functionAuthor"
+                  ><t-input v-model="editForm.functionAuthor" /></t-form-item
               ></t-col>
             </t-row>
-            <t-form-item label="备注"><t-textarea v-model="editForm.remark" :autosize="{ minRows: 2 }" /></t-form-item>
+            <t-form-item label="备注" name="remark"
+              ><t-textarea v-model="editForm.remark" :autosize="{ minRows: 2 }"
+            /></t-form-item>
           </t-form>
         </t-tab-panel>
 
         <!-- 字段信息 -->
-        <t-tab-panel label="字段信息" value="columns">
-          <t-table :columns="colColumns" :data="editColumns" hover max-height="420" row-key="columnId" stripe>
-            <template #isInsert="{ row }"><t-switch v-model="row.isInsert" :custom-value="['1', '0']" /></template>
-            <template #isEdit="{ row }"><t-switch v-model="row.isEdit" :custom-value="['1', '0']" /></template>
-            <template #isList="{ row }"><t-switch v-model="row.isList" :custom-value="['1', '0']" /></template>
-            <template #isQuery="{ row }"><t-switch v-model="row.isQuery" :custom-value="['1', '0']" /></template>
-            <template #isRequired="{ row }"><t-switch v-model="row.isRequired" :custom-value="['1', '0']" /></template>
+        <t-tab-panel :destroy-on-hide="false" label="字段信息" value="columns">
+          <t-table :columns="colColumns" :data="editColumns" bordered max-height="460" row-key="columnId" size="small">
+            <template #index="{ rowIndex }">{{ rowIndex + 1 }}</template>
+            <template #columnComment="{ row }"><t-input v-model="row.columnComment" size="small" /></template>
+            <template #javaField="{ row }"><t-input v-model="row.javaField" size="small" /></template>
+            <template #isInsert="{ row }"
+              ><t-checkbox :checked="row.isInsert === '1'" @change="(v: boolean) => (row.isInsert = v ? '1' : '0')"
+            /></template>
+            <template #isEdit="{ row }"
+              ><t-checkbox :checked="row.isEdit === '1'" @change="(v: boolean) => (row.isEdit = v ? '1' : '0')"
+            /></template>
+            <template #isList="{ row }"
+              ><t-checkbox :checked="row.isList === '1'" @change="(v: boolean) => (row.isList = v ? '1' : '0')"
+            /></template>
+            <template #isQuery="{ row }"
+              ><t-checkbox :checked="row.isQuery === '1'" @change="(v: boolean) => (row.isQuery = v ? '1' : '0')"
+            /></template>
+            <template #isRequired="{ row }"
+              ><t-checkbox :checked="row.isRequired === '1'" @change="(v: boolean) => (row.isRequired = v ? '1' : '0')"
+            /></template>
             <template #javaType="{ row }">
               <t-select v-model="row.javaType" :options="javaTypeOptions" size="small" />
             </template>
             <template #htmlType="{ row }">
-              <t-select v-model="row.htmlType" :options="htmlTypeOptions" size="small" />
+              <t-select
+                v-model="row.htmlType"
+                :options="htmlTypeOptions"
+                size="small"
+                @change="normalizeColumnDictType(row)"
+              />
             </template>
             <template #queryType="{ row }">
               <t-select v-model="row.queryType" :options="queryTypeOptions" size="small" />
+            </template>
+            <template #dictType="{ row }">
+              <t-select
+                v-model="row.dictType"
+                :disabled="!supportsDictHtmlType(row.htmlType)"
+                :options="dictOptions"
+                clearable
+                filterable
+                placeholder="请选择"
+                size="small"
+              />
             </template>
           </t-table>
         </t-tab-panel>
 
         <!-- 生成信息 -->
-        <t-tab-panel label="生成信息" value="gen">
-          <t-form :data="editForm" label-width="120px">
+        <t-tab-panel :destroy-on-hide="false" label="生成信息" value="gen">
+          <t-form ref="genFormRef" :data="editForm" :rules="genRules" label-width="120px">
             <t-row>
               <t-col :span="6"
-                ><t-form-item label="生成模板"
+                ><t-form-item label="生成模板" name="tplCategory"
                   ><t-select v-model="editForm.tplCategory" :options="tplOptions" /></t-form-item
               ></t-col>
               <t-col :span="6"
-                ><t-form-item label="前端模板"
-                  ><t-select v-model="editForm.frontendType" :options="frontendOptions" /></t-form-item
+                ><t-form-item label="前端模板" name="frontendType"
+                  ><t-radio-group v-model="editForm.frontendType" :options="frontendOptions" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
               <t-col :span="6"
-                ><t-form-item label="生成包路径"><t-input v-model="editForm.packageName" /></t-form-item
+                ><t-form-item help="生成在哪个 java 包下，例如 com.ruoyi.system" label="生成包路径" name="packageName"
+                  ><t-input v-model="editForm.packageName" /></t-form-item
               ></t-col>
               <t-col :span="6"
-                ><t-form-item label="生成模块名"><t-input v-model="editForm.moduleName" /></t-form-item
+                ><t-form-item help="可理解为子系统名，例如 system" label="生成模块名" name="moduleName"
+                  ><t-input v-model="editForm.moduleName" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
               <t-col :span="6"
-                ><t-form-item label="生成业务名"><t-input v-model="editForm.businessName" /></t-form-item
+                ><t-form-item help="可理解为功能英文名，例如 user" label="生成业务名" name="businessName"
+                  ><t-input v-model="editForm.businessName" /></t-form-item
               ></t-col>
               <t-col :span="6"
-                ><t-form-item label="生成功能名"><t-input v-model="editForm.functionName" /></t-form-item
+                ><t-form-item help="用作类描述，例如 用户" label="生成功能名" name="functionName"
+                  ><t-input v-model="editForm.functionName" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
               <t-col :span="3"
-                ><t-form-item label="启用导出"><t-switch v-model="editForm.enableExport" /></t-form-item
+                ><t-form-item label="导出能力"><t-switch v-model="editForm.enableExport" /></t-form-item
               ></t-col>
               <t-col :span="3"
-                ><t-form-item label="启用状态"><t-switch v-model="editForm.enableStatus" /></t-form-item
+                ><t-form-item label="状态切换"><t-switch v-model="editForm.enableStatus" /></t-form-item
               ></t-col>
               <t-col :span="3"
-                ><t-form-item label="启用排序"><t-switch v-model="editForm.enableSort" /></t-form-item
+                ><t-form-item label="排序调整"><t-switch v-model="editForm.enableSort" /></t-form-item
               ></t-col>
               <t-col :span="3"
-                ><t-form-item label="启用唯一"><t-switch v-model="editForm.enableUnique" /></t-form-item
+                ><t-form-item label="组合唯一"><t-switch v-model="editForm.enableUnique" /></t-form-item
               ></t-col>
             </t-row>
             <t-row v-if="editForm.enableStatus">
               <t-col :span="12"
-                ><t-form-item label="状态字段"
+                ><t-form-item label="状态字段" name="statusField"
                   ><t-select
                     v-model="editForm.statusField"
                     :options="columnOptions"
@@ -230,13 +288,17 @@
             </t-row>
             <t-row v-if="editForm.enableSort">
               <t-col :span="12"
-                ><t-form-item label="排序字段"
-                  ><t-select v-model="editForm.sortField" :options="columnOptions" clearable filterable /></t-form-item
+                ><t-form-item label="排序字段" name="sortField"
+                  ><t-select
+                    v-model="editForm.sortField"
+                    :options="sortableColumnOptions"
+                    clearable
+                    filterable /></t-form-item
               ></t-col>
             </t-row>
             <t-row v-if="editForm.enableUnique">
               <t-col :span="12"
-                ><t-form-item label="唯一字段"
+                ><t-form-item label="唯一字段" name="uniqueFields"
                   ><t-select
                     v-model="editForm.uniqueFields"
                     :options="columnOptions"
@@ -265,7 +327,7 @@
                   ><t-select v-model="editForm.treeName" :options="columnOptions" clearable filterable /></t-form-item
               ></t-col>
               <t-col :span="6"
-                ><t-form-item label="树根值"
+                ><t-form-item label="根节点值" name="treeRootValue"
                   ><t-input v-model="editForm.treeRootValue" placeholder="如 0" /></t-form-item
               ></t-col>
             </t-row>
@@ -282,21 +344,20 @@
                 ><t-form-item label="树排序字段"
                   ><t-select
                     v-model="editForm.treeOrderField"
-                    :options="columnOptions"
+                    :options="sortableColumnOptions"
                     clearable
                     filterable /></t-form-item
               ></t-col>
             </t-row>
-            <t-form-item label="父菜单"
+            <t-form-item help="分配到指定菜单下，例如 系统管理" label="上级菜单"
               ><t-tree-select
                 v-model="editForm.parentMenuId"
                 :data="menuTreeOptions"
                 :keys="{ label: 'label', value: 'value', children: 'children' }"
                 clearable
                 filterable
-                placeholder="生成菜单挂载位置"
+                placeholder="选择上级菜单"
             /></t-form-item>
-            <t-form-item label="备注"><t-textarea v-model="editForm.remark" :autosize="{ minRows: 2 }" /></t-form-item>
           </t-form>
         </t-tab-panel>
       </t-tabs>
@@ -305,16 +366,24 @@
 </template>
 
 <script lang="ts" setup>
-import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { AddIcon, DownloadIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import {
+  DeleteIcon,
+  DownloadIcon,
+  EditIcon,
+  FileCopyIcon,
+  RefreshIcon,
+  SearchIcon,
+  UploadIcon,
+} from 'tdesign-icons-vue-next';
+import { useClipboard } from '@vueuse/core';
 import { computed, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import type { DbTableVO, PreviewResult, TableQuery, TableVO } from '@/api/tool/gen/types';
 import {
-  batchGenCode,
   delTable,
-  genCode,
   getDataNames,
   getGenTable,
   importTable,
@@ -324,14 +393,15 @@ import {
   synchDb,
   updateGenTable,
 } from '@/api/tool/gen';
+import { optionselect as getDictOptionselect } from '@/api/system/dict/type';
 import { treeselect as menuTreeselect } from '@/api/system/menu';
 import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
-import { download } from '@/utils/request';
+import { downloadZip } from '@/utils/request';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'ToolGen' });
-
 const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
+const route = useRoute();
 
 const list = ref<TableVO[]>([]);
 const loading = ref(false);
@@ -345,12 +415,13 @@ const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: tr
 
 const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
-  { colKey: 'tableId', title: '序号', width: 80, align: 'center' },
-  { colKey: 'tableName', title: '表名称', width: 200 },
-  { colKey: 'tableComment', title: '表描述', width: 200 },
-  { colKey: 'className', title: '实体类', width: 200, ellipsis: true },
+  { colKey: 'dataName', title: '数据源', width: 120, ellipsis: true },
+  { colKey: 'tableName', title: '表名称', width: 200, ellipsis: true },
+  { colKey: 'tableComment', title: '表描述', width: 200, ellipsis: true },
+  { colKey: 'className', title: '实体', width: 200, ellipsis: true },
   { colKey: 'createTime', title: '创建时间', width: 180 },
-  { colKey: 'operation', title: '操作', width: 340, fixed: 'right', align: 'center' },
+  { colKey: 'updateTime', title: '更新时间', width: 180 },
+  { colKey: 'operation', title: '操作', width: 300, fixed: 'right', align: 'center' },
 ];
 const columns = ref<PrimaryTableCol[]>(columnsData);
 const realColumns = computed<PrimaryTableCol[]>(() => {
@@ -412,31 +483,40 @@ const handlePreview = async (row: TableVO) => {
   const data = (res?.data ?? {}) as PreviewResult;
   previewFiles.value = data;
   const keys = Object.keys(data);
-  fileOptions.value = keys.map((k) => ({ label: k, value: k }));
+  // 模板路径如 vm/java/domain.java.vm → 显示 domain.java
+  fileOptions.value = keys.map((k) => ({ label: k.substring(k.lastIndexOf('/') + 1).replace(/\.vm$/, ''), value: k }));
   currentFile.value = keys[0] ?? '';
   previewVisible.value = true;
 };
+const { copy } = useClipboard({ legacy: true });
+const copyCode = async (text?: string) => {
+  await copy(text ?? '');
+  MessagePlugin.success('复制成功');
+};
 
-// ---- 生成 / 下载 / 同步 / 删除 ----
-const handleGen = async (row: TableVO) => {
-  await genCode(row.tableName);
-  MessagePlugin.success('生成成功');
+// ---- 生成 / 同步 / 删除 ----
+/** 生成代码：单行或批量，均走 batchGenCode?tableIdStr= 下载 zip（同原项目） */
+const handleGenTable = (row?: TableVO) => {
+  const rows = row ? [row] : selectedRows.value;
+  if (!rows.length) {
+    MessagePlugin.error('请选择要生成的数据');
+    return;
+  }
+  const ids = rows.map((r) => r.tableId).join(',');
+  downloadZip(`/tool/gen/batchGenCode?tableIdStr=${ids}`, 'ruoyi.zip');
 };
-const handleBatchGen = async () => {
-  const tables = selectedRows.value.map((r) => r.tableName).join(',');
-  if (!tables) return;
-  await batchGenCode(tables);
-  MessagePlugin.success('批量生成成功');
-};
-const handleDownload = (row: TableVO) => download(`/tool/gen/download/${row.tableName}`, {}, `${row.tableName}.zip`);
 const handleSync = async (row: TableVO) => {
   await synchDb(row.tableId);
   MessagePlugin.success('同步成功');
   getList();
 };
-const handleDelete = async (row: TableVO) => {
-  await delTable(row.tableId);
+const handleDelete = async (row?: TableVO) => {
+  const ids = row ? [row.tableId] : selectedRows.value.map((r) => r.tableId);
+  if (!ids.length) return;
+  await delTable(ids);
   MessagePlugin.success('删除成功');
+  selectedKeys.value = [];
+  selectedRows.value = [];
   getList();
 };
 
@@ -505,19 +585,36 @@ const handleImport = async () => {
   }
 };
 
-// ---- 配置编辑（基础信息） ----
+// ---- 配置编辑 ----
 const editVisible = ref(false);
 const saving = ref(false);
 const editForm = reactive<any>({});
 const editTab = ref('basic');
 const editColumns = ref<any[]>([]);
+const dictOptions = ref<{ label: string; value: string }[]>([]);
+const basicFormRef = ref<FormInstanceFunctions>();
+const genFormRef = ref<FormInstanceFunctions>();
+
+const DICT_HTML_TYPES = ['select', 'radio', 'checkbox', 'switch'];
+const supportsDictHtmlType = (htmlType?: string) => DICT_HTML_TYPES.includes(htmlType ?? '');
+const normalizeColumnDictType = (column: any) => {
+  if (!supportsDictHtmlType(column.htmlType)) column.dictType = '';
+};
 
 // 列字段下拉选项（用于状态/排序/唯一/树字段选择）
 const columnOptions = computed(() =>
-  editColumns.value.map((c) => ({
+  editColumns.value.map((c: any) => ({
     label: `${c.columnName}${c.columnComment ? ': ' + c.columnComment : ''}`,
     value: c.columnName,
   })),
+);
+const sortableColumnOptions = computed(() =>
+  editColumns.value
+    .filter((c: any) => ['Integer', 'Long', 'Double', 'BigDecimal', 'LocalDateTime'].includes(c.javaType ?? ''))
+    .map((c: any) => ({
+      label: `${c.columnName}${c.columnComment ? ': ' + c.columnComment : ''}`,
+      value: c.columnName,
+    })),
 );
 
 // 父菜单树选项
@@ -530,64 +627,86 @@ const toMenuTree = (nodes: any[]): any[] =>
   }));
 
 const colColumns: PrimaryTableCol[] = [
-  { colKey: 'columnComment', title: '字段列名', width: 160, ellipsis: true },
-  { colKey: 'columnType', title: '物理类型', width: 140, ellipsis: true },
-  { colKey: 'javaType', title: 'Java类型', width: 140 },
-  { colKey: 'javaField', title: 'Java属性', width: 140, edit: { component: 't-input' } },
-  { colKey: 'isInsert', title: '插入', width: 70, align: 'center' },
-  { colKey: 'isEdit', title: '编辑', width: 70, align: 'center' },
-  { colKey: 'isList', title: '列表', width: 70, align: 'center' },
-  { colKey: 'isQuery', title: '查询', width: 70, align: 'center' },
-  { colKey: 'isRequired', title: '必填', width: 70, align: 'center' },
-  { colKey: 'queryType', title: '查询方式', width: 120 },
-  { colKey: 'htmlType', title: '显示类型', width: 120 },
+  { colKey: 'index', title: '序号', width: 60, align: 'center' },
+  { colKey: 'columnName', title: '字段列名', width: 160, ellipsis: true },
+  { colKey: 'columnComment', title: '字段描述', width: 160 },
+  { colKey: 'columnType', title: '物理类型', width: 130, ellipsis: true },
+  { colKey: 'javaType', title: 'Java类型', width: 150 },
+  { colKey: 'javaField', title: 'Java属性', width: 130 },
+  { colKey: 'isInsert', title: '插入', width: 60, align: 'center' },
+  { colKey: 'isEdit', title: '编辑', width: 60, align: 'center' },
+  { colKey: 'isList', title: '列表', width: 60, align: 'center' },
+  { colKey: 'isQuery', title: '查询', width: 60, align: 'center' },
+  { colKey: 'isRequired', title: '必填', width: 60, align: 'center' },
+  { colKey: 'queryType', title: '查询方式', width: 130 },
+  { colKey: 'htmlType', title: '显示类型', width: 130 },
+  { colKey: 'dictType', title: '字典类型', width: 160 },
 ];
 
 const javaTypeOptions = [
-  { label: 'String', value: 'String' },
   { label: 'Long', value: 'Long' },
+  { label: 'String', value: 'String' },
   { label: 'Integer', value: 'Integer' },
   { label: 'Double', value: 'Double' },
   { label: 'BigDecimal', value: 'BigDecimal' },
-  { label: 'Date', value: 'Date' },
+  { label: 'LocalDateTime', value: 'LocalDateTime' },
   { label: 'Boolean', value: 'Boolean' },
 ];
 const htmlTypeOptions = [
   { label: '文本框', value: 'input' },
+  { label: '数字输入', value: 'inputNumber' },
   { label: '文本域', value: 'textarea' },
   { label: '下拉框', value: 'select' },
   { label: '单选框', value: 'radio' },
   { label: '复选框', value: 'checkbox' },
+  { label: '开关', value: 'switch' },
   { label: '日期控件', value: 'datetime' },
   { label: '图片上传', value: 'imageUpload' },
   { label: '文件上传', value: 'fileUpload' },
+  { label: '富文本控件', value: 'editor' },
 ];
 const queryTypeOptions = [
-  { label: '等于', value: 'EQ' },
-  { label: '不等于', value: 'NE' },
-  { label: '大于', value: 'GT' },
-  { label: '大于等于', value: 'GTE' },
-  { label: '小于', value: 'LT' },
-  { label: '小于等于', value: 'LTE' },
-  { label: '模糊', value: 'LIKE' },
+  { label: '=', value: 'EQ' },
+  { label: '!=', value: 'NE' },
+  { label: '>', value: 'GT' },
+  { label: '>=', value: 'GE' },
+  { label: '<', value: 'LT' },
+  { label: '<=', value: 'LE' },
+  { label: 'LIKE', value: 'LIKE' },
+  { label: 'BETWEEN', value: 'BETWEEN' },
 ];
 const tplOptions = [
   { label: '单表（增删改查）', value: 'crud' },
   { label: '树表（增删改查）', value: 'tree' },
-  { label: '主子表（增删改查）', value: 'sub' },
 ];
 const frontendOptions = [
-  { label: 'Vue2', value: 'vue' },
-  { label: 'Vue3', value: 'vue3' },
+  { label: 'Vue', value: 'vue' },
+  { label: 'React', value: 'react' },
 ];
+
+const basicRules: Record<string, FormRule[]> = {
+  tableName: [{ required: true, message: '表名称不能为空', type: 'error' }],
+  tableComment: [{ required: true, message: '表描述不能为空', type: 'error' }],
+  className: [{ required: true, message: '实体类名称不能为空', type: 'error' }],
+  functionAuthor: [{ required: true, message: '作者不能为空', type: 'error' }],
+};
+const genRules: Record<string, FormRule[]> = {
+  tplCategory: [{ required: true, message: '请选择生成模板', type: 'error' }],
+  packageName: [{ required: true, message: '请输入生成包路径', type: 'error' }],
+  moduleName: [{ required: true, message: '请输入生成模块名', type: 'error' }],
+  businessName: [{ required: true, message: '请输入生成业务名', type: 'error' }],
+  functionName: [{ required: true, message: '请输入生成功能名', type: 'error' }],
+};
 
 const handleEdit = async (row: TableVO) => {
   editTab.value = 'basic';
   const res = await getGenTable(row.tableId);
   const data = res?.data as any;
-  const t = data?.table ?? row;
+  // 后端返回 { info: GenTable, rows: GenTableColumn[] }
+  const t = data?.info ?? data?.table ?? row;
   Object.assign(editForm, {
     tableId: t.tableId,
+    dataName: t.dataName,
     tableName: t.tableName,
     tableComment: t.tableComment,
     className: t.className,
@@ -597,22 +716,29 @@ const handleEdit = async (row: TableVO) => {
     businessName: t.businessName,
     functionName: t.functionName,
     tplCategory: t.tplCategory ?? 'crud',
-    frontendType: t.frontendType ?? 'vue3',
-    enableExport: !!t.enableExport,
+    frontendType: t.frontendType ?? 'vue',
+    // 增强选项直接来自 GenTable 顶层字段（backend 在 setTableFromOptions 中从 options JSON 解出后赋值）
+    enableExport: t.enableExport !== false && t.enableExport !== null ? (t.enableExport ?? true) : false,
     enableStatus: !!t.enableStatus,
-    enableSort: !!t.enableSort,
-    enableUnique: !!t.enableUnique,
     statusField: t.statusField ?? '',
-    sortField: t.sortField ?? '',
+    enableUnique: !!t.enableUnique,
     uniqueFields: t.uniqueFields ?? [],
+    enableSort: !!t.enableSort,
+    sortField: t.sortField ?? '',
     treeCode: t.treeCode ?? '',
     treeParentCode: t.treeParentCode ?? '',
     treeName: t.treeName ?? '',
-    treeRootValue: t.treeRootValue ?? '',
+    treeRootValue: t.treeRootValue ?? '0',
     treeAncestorsField: t.treeAncestorsField ?? '',
     treeOrderField: t.treeOrderField ?? '',
     parentMenuId: t.parentMenuId ?? 0,
-    remark: t.remark,
+    remark: t.remark ?? '',
+  });
+  // 字段信息
+  editColumns.value = (data?.rows ?? []).map((c: any) => {
+    const col = { ...c };
+    if (!supportsDictHtmlType(String(col.htmlType ?? ''))) col.dictType = '';
+    return col;
   });
   // 父菜单树
   try {
@@ -621,20 +747,47 @@ const handleEdit = async (row: TableVO) => {
   } catch {
     menuTreeOptions.value = [{ label: '主类目', value: 0 }];
   }
-  editColumns.value = (data?.rows ?? []).map((c: any) => ({
-    ...c,
-    isInsert: String(c.isInsert ?? '0'),
-    isEdit: String(c.isEdit ?? '0'),
-    isList: String(c.isList ?? '0'),
-    isQuery: String(c.isQuery ?? '0'),
-    isRequired: String(c.isRequired ?? '0'),
-  }));
+  // 字典类型下拉
+  try {
+    const dres = await getDictOptionselect();
+    dictOptions.value = (dres?.data ?? []).map((d: any) => ({ label: d.dictName, value: d.dictType }));
+  } catch {
+    dictOptions.value = [];
+  }
   editVisible.value = true;
 };
+
 const handleSaveConfig = async () => {
+  const basicOk = (await basicFormRef.value?.validate()) === true;
+  const genOk = (await genFormRef.value?.validate()) === true;
+  if (!basicOk || !genOk) {
+    MessagePlugin.error('表单校验未通过，请重新检查提交内容');
+    return;
+  }
   saving.value = true;
   try {
-    await updateGenTable({ ...editForm, columns: editColumns.value });
+    // 将增强选项组装进 params（后端 updateGenTable 会将 params 序列化为 options JSON）
+    const payload = {
+      ...editForm,
+      columns: editColumns.value,
+      params: {
+        treeCode: editForm.treeCode,
+        treeName: editForm.treeName,
+        treeParentCode: editForm.treeParentCode,
+        parentMenuId: editForm.parentMenuId,
+        enableExport: editForm.enableExport,
+        enableStatus: editForm.enableStatus,
+        statusField: editForm.statusField,
+        enableUnique: editForm.enableUnique,
+        uniqueFields: editForm.uniqueFields,
+        enableSort: editForm.enableSort,
+        sortField: editForm.sortField,
+        treeRootValue: editForm.treeRootValue,
+        treeAncestors: editForm.treeAncestorsField,
+        treeOrderField: editForm.treeOrderField,
+      },
+    };
+    await updateGenTable(payload);
     MessagePlugin.success('保存成功');
     editVisible.value = false;
     getList();

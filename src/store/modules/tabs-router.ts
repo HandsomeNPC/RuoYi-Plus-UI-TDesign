@@ -78,7 +78,8 @@ export const useTabsRouterStore = defineStore('tabsRouter', {
       this.tabRouterList = routeIdx === homeIdx ? homeRoute : homeRoute.concat([this.tabRouterList?.[routeIdx]]);
     },
     removeTabRouterList() {
-      this.tabRouterList = [];
+      // 保留首页固定标签
+      this.tabRouterList = [...homeRoute];
     },
     initTabRouterList(newRoutes: TRouterInfo[]) {
       newRoutes?.forEach((route: TRouterInfo) => this.appendTabRouterList(route));
