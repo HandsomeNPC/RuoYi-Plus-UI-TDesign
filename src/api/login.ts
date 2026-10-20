@@ -1,7 +1,7 @@
 import type { AxiosPromise } from '@/utils/api-types';
 import request from '@/utils/request';
 
-import type { LoginData, LoginResult, VerifyCodeResult } from './types';
+import type { LoginData, LoginResult, RegisterForm, VerifyCodeResult } from './types';
 
 // pc 端固定客户端授权 id
 const clientId = import.meta.env.VITE_APP_CLIENT_ID;
@@ -35,6 +35,27 @@ export function logout() {
   return request({
     url: '/auth/logout',
     method: 'post',
+  });
+}
+
+/**
+ * 注册
+ */
+export function register(data: RegisterForm) {
+  const params = {
+    ...data,
+    clientId,
+    grantType: 'password',
+  };
+  return request({
+    url: '/auth/register',
+    headers: {
+      isToken: false,
+      isEncrypt: 'true',
+      repeatSubmit: false,
+    },
+    method: 'post',
+    data: params,
   });
 }
 

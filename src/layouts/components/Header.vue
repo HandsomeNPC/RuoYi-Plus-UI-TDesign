@@ -70,6 +70,7 @@ import { prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
 import { useSettingStore, useUserStore } from '@/store';
+import { closePush } from '@/utils/push';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';
@@ -138,6 +139,7 @@ const handleNav = (url: string) => {
 };
 
 const handleLogout = async () => {
+  closePush();
   await user.logout();
   router.push({
     path: '/login',

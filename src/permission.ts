@@ -7,6 +7,7 @@ import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 import { getToken } from '@/utils/auth';
 import { isHandledRequestError } from '@/utils/request';
+import { closePush, initMessageBox, initPush } from '@/utils/push';
 
 NProgress.configure({ showSpinner: false });
 
@@ -28,6 +29,9 @@ router.beforeEach(async (to, _from, next) => {
       // 判断当前用户是否已拉取完 user_info 信息
       if (userStore.roles.length === 0) {
         await userStore.getInfo();
+        // 启动统一消息推送（SSE/WebSocket，仅首次进入时初始化）
+        initMessageBox();
+        initPush();
       }
 
       // 根据权限生成可访问的路由表
@@ -47,6 +51,7 @@ router.beforeEach(async (to, _from, next) => {
       if (!isHandledRequestError(error)) {
         MessagePlugin.error(message);
       }
+      closePush();
       await useUserStore().logout();
       next({ path: '/login', query: { redirect: to.fullPath } });
       NProgress.done();

@@ -1,0 +1,197 @@
+<template>
+  <div class="operlog-page">
+    <t-card :bordered="false">
+      <template #title><div class="card-title">操作日志</div></template>
+      <template #actions>
+        <t-popconfirm content="是否清空所有操作日志?" @confirm="handleClean">
+          <t-button v-hasPermi="['monitor:operlog:remove']" theme="danger" variant="outline"
+            ><template #icon><delete-icon /></template>清空</t-button
+          >
+        </t-popconfirm>
+      </template>
+
+      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+        <t-form-item label="系统模块" name="title"
+          ><t-input v-model="queryParams.title" clearable placeholder="请输入系统模块"
+        /></t-form-item>
+        <t-form-item label="操作人员" name="operName"
+          ><t-input v-model="queryParams.operName" clearable placeholder="请输入操作人员"
+        /></t-form-item>
+        <t-form-item label="操作类型" name="businessType"
+          ><dict-select
+            v-model="queryParams.businessType"
+            placeholder="操作类型"
+            style="width: 160px"
+            type="sys_oper_type"
+        /></t-form-item>
+        <t-form-item label="状态" name="status"
+          ><dict-select v-model="queryParams.status" placeholder="状态" style="width: 140px" type="sys_common_status"
+        /></t-form-item>
+        <t-form-item :style="{ marginLeft: 'auto' }">
+          <t-space>
+            <t-button theme="primary" type="submit"
+              ><template #icon><search-icon /></template>搜索</t-button
+            >
+            <t-button theme="default" @click="resetQuery"
+              ><template #icon><refresh-icon /></template>重置</t-button
+            >
+          </t-space>
+        </t-form-item>
+      </t-form>
+
+      <div class="toolbar">
+        <t-button v-hasPermi="['monitor:operlog:export']" theme="warning" variant="outline" @click="handleExport"
+          ><template #icon><download-icon /></template>导出</t-button
+        >
+      </div>
+
+      <t-table
+        :columns="columns"
+        :data="listData"
+        :loading="loading"
+        :pagination="pagination"
+        hover
+        row-key="operId"
+        stripe
+        @page-change="onPageChange"
+      >
+        <template #businessType="{ row }"><dict-tag :options="sys_oper_type" :value="row.businessType" /></template>
+        <template #status="{ row }"><dict-tag :options="sys_common_status" :value="row.status" /></template>
+        <template #operTime="{ row }">{{ parseTime(row.operTime) }}</template>
+        <template #operation="{ row }">
+          <t-space size="small">
+            <t-link v-hasPermi="['monitor:operlog:query']" hover="color" theme="primary" @click="handleDetail(row)"
+              >详细</t-link
+            >
+            <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
+              <t-link v-hasPermi="['monitor:operlog:remove']" hover="color" theme="danger">删除</t-link>
+            </t-popconfirm>
+          </t-space>
+        </template>
+      </t-table>
+    </t-card>
+
+    <t-drawer v-model:visible="detailVisible" header="操作日志详细" size="500px">
+      <t-descriptions v-if="current" :column="1" bordered>
+        <t-descriptions-item label="操作模块">{{ current.title }}</t-descriptions-item>
+        <t-descriptions-item label="请求方法">{{ current.method }}</t-descriptions-item>
+        <t-descriptions-item label="请求方式">{{ current.requestMethod }}</t-descriptions-item>
+        <t-descriptions-item label="操作人员">{{ current.operName }}</t-descriptions-item>
+        <t-descriptions-item label="操作IP">{{ current.operIp }}</t-descriptions-item>
+        <t-descriptions-item label="操作地点">{{ current.operLocation }}</t-descriptions-item>
+        <t-descriptions-item label="请求地址">{{ current.operUrl }}</t-descriptions-item>
+        <t-descriptions-item label="请求参数">{{ current.operParam }}</t-descriptions-item>
+        <t-descriptions-item label="返回结果">{{ current.jsonResult }}</t-descriptions-item>
+        <t-descriptions-item label="错误消息">{{ current.errorMsg }}</t-descriptions-item>
+        <t-descriptions-item label="操作时间">{{ parseTime(current.operTime) }}</t-descriptions-item>
+        <t-descriptions-item label="耗时(ms)">{{ current.costTime }}</t-descriptions-item>
+      </t-descriptions>
+    </t-drawer>
+  </div>
+</template>
+
+<script lang="ts" setup>
+import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { DeleteIcon, DownloadIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { reactive, ref } from 'vue';
+
+import type { OperLogQuery, OperLogVO } from '@/api/monitor/operlog/types';
+import { cleanOperlog, delOperlog, list } from '@/api/monitor/operlog';
+import { download } from '@/utils/request';
+import { useDict } from '@/utils/dict';
+import { parseTime } from '@/utils/ruoyi';
+
+defineOptions({ name: 'MonitorOperlog' });
+
+const { sys_oper_type, sys_common_status } = useDict('sys_oper_type', 'sys_common_status');
+
+const listData = ref<OperLogVO[]>([]);
+const loading = ref(false);
+const detailVisible = ref(false);
+const current = ref<OperLogVO | null>(null);
+
+const queryParams = reactive<OperLogQuery>({
+  pageNum: 1,
+  pageSize: 10,
+  title: '',
+  operName: '',
+  businessType: '',
+  status: '',
+});
+const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
+
+const columns: PrimaryTableCol[] = [
+  { colKey: 'operId', title: '日志编号', width: 90, align: 'center' },
+  { colKey: 'title', title: '系统模块', width: 160 },
+  { colKey: 'businessType', title: '操作类型', width: 100, align: 'center' },
+  { colKey: 'operName', title: '操作人员', width: 120 },
+  { colKey: 'deptName', title: '部门名称', width: 160, ellipsis: true },
+  { colKey: 'operIp', title: '主机', width: 140 },
+  { colKey: 'operLocation', title: '操作地点', width: 160, ellipsis: true },
+  { colKey: 'status', title: '状态', width: 90, align: 'center' },
+  { colKey: 'operTime', title: '操作时间', width: 180 },
+  { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
+];
+
+const getList = async () => {
+  loading.value = true;
+  try {
+    const res = await list(queryParams);
+    const data = res?.data;
+    listData.value = data?.rows ?? [];
+    pagination.total = data?.total ?? 0;
+    pagination.current = queryParams.pageNum;
+    pagination.pageSize = queryParams.pageSize;
+  } finally {
+    loading.value = false;
+  }
+};
+const onPageChange = (p: PageInfo) => {
+  queryParams.pageNum = p.current;
+  queryParams.pageSize = p.pageSize;
+  getList();
+};
+const handleQuery = () => {
+  queryParams.pageNum = 1;
+  getList();
+};
+const resetQuery = () => {
+  queryParams.title = '';
+  queryParams.operName = '';
+  queryParams.businessType = '';
+  queryParams.status = '';
+  handleQuery();
+};
+const handleExport = () => download('/monitor/operlog/export', { ...queryParams }, `operlog_${Date.now()}.xlsx`);
+const handleDetail = (row: OperLogVO) => {
+  current.value = row;
+  detailVisible.value = true;
+};
+const handleDelete = async (row: OperLogVO) => {
+  await delOperlog(row.operId);
+  MessagePlugin.success('删除成功');
+  getList();
+};
+const handleClean = async () => {
+  await cleanOperlog();
+  MessagePlugin.success('清空成功');
+  getList();
+};
+
+getList();
+</script>
+
+<style lang="less" scoped>
+.operlog-page {
+  padding: 16px;
+}
+.card-title {
+  font-weight: 600;
+}
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+</style>

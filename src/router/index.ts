@@ -27,6 +27,11 @@ export const constantRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/login/index.vue'),
   },
   {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/pages/register/index.vue'),
+  },
+  {
     path: '/redirect',
     component: LAYOUT,
     children: [
