@@ -36,6 +36,15 @@
       </t-form>
 
       <div class="toolbar">
+        <t-popconfirm content="是否确认删除选中的登录日志?" @confirm="handleDelete()">
+          <t-button
+            v-hasPermi="['monitor:logininfo:remove']"
+            :disabled="!selectedRows.length"
+            theme="danger"
+            variant="outline"
+            ><template #icon><delete-icon /></template>删除</t-button
+          >
+        </t-popconfirm>
         <t-button v-hasPermi="['monitor:logininfo:export']" theme="warning" variant="outline" @click="handleExport"
           ><template #icon><download-icon /></template>导出</t-button
         >
@@ -59,6 +68,7 @@
       <t-table
         :columns="realColumns"
         :data="listData"
+        :default-sort="defaultSort"
         :loading="loading"
         :pagination="pagination"
         :selected-row-keys="selectedKeys"
@@ -67,6 +77,7 @@
         stripe
         @select-change="onSelectChange"
         @page-change="onPageChange"
+        @sort-change="onSortChange"
       >
         <template #status="{ row }"><dict-tag :options="sys_common_status" :value="row.status" /></template>
         <template #deviceType="{ row }"><dict-tag :options="sys_device_type" :value="row.deviceType" /></template>
@@ -105,14 +116,23 @@ const loading = ref(false);
 const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<LoginInfoVO[]>([]);
 const showSearch = ref(true);
+const defaultSort = [{ sortBy: 'loginTime', descending: true }];
 
-const queryParams = reactive<LoginInfoQuery>({ pageNum: 1, pageSize: 10, userName: '', ipaddr: '', status: '' });
+const queryParams = reactive<LoginInfoQuery>({
+  pageNum: 1,
+  pageSize: 10,
+  userName: '',
+  ipaddr: '',
+  status: '',
+  orderByColumn: 'loginTime',
+  isAsc: 'desc',
+});
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
 const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'infoId', title: '访问编号', width: 90, align: 'center' },
-  { colKey: 'userName', title: '用户名称', width: 140 },
+  { colKey: 'userName', title: '用户名称', width: 140, sorter: true },
   { colKey: 'ipaddr', title: 'IP地址', width: 150 },
   { colKey: 'loginLocation', title: '登录地点', width: 160, ellipsis: true },
   { colKey: 'clientKey', title: '客户端', width: 110, ellipsis: true },
@@ -121,7 +141,7 @@ const columnsData: PrimaryTableCol[] = [
   { colKey: 'os', title: '操作系统', width: 140 },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'msg', title: '描述', ellipsis: true, minWidth: 140 },
-  { colKey: 'loginTime', title: '登录时间', width: 180 },
+  { colKey: 'loginTime', title: '登录时间', width: 180, sorter: true },
   { colKey: 'operation', title: '操作', width: 120, fixed: 'right', align: 'center' },
 ];
 const columns = ref<PrimaryTableCol[]>(columnsData);
@@ -147,6 +167,18 @@ const onSelectChange = (keys: (string | number)[], options: any) => {
   selectedKeys.value = keys;
   selectedRows.value = options?.selectedRowData ?? [];
 };
+const onSortChange = (sort: any) => {
+  const s = Array.isArray(sort) ? sort[0] : sort;
+  if (s?.sortBy) {
+    queryParams.orderByColumn = s.sortBy;
+    queryParams.isAsc = s.descending ? 'desc' : 'asc';
+  } else {
+    queryParams.orderByColumn = 'loginTime';
+    queryParams.isAsc = 'desc';
+  }
+  queryParams.pageNum = 1;
+  getList();
+};
 const onPageChange = (p: PageInfo) => {
   queryParams.pageNum = p.current;
   queryParams.pageSize = p.pageSize;
@@ -164,9 +196,13 @@ const resetQuery = () => {
   handleQuery();
 };
 const handleExport = () => download('/monitor/loginInfo/export', { ...queryParams }, `logininfor_${Date.now()}.xlsx`);
-const handleDelete = async (row: LoginInfoVO) => {
-  await delLoginInfo(row.infoId);
+const handleDelete = async (row?: LoginInfoVO) => {
+  const ids = row ? [row.infoId] : selectedRows.value.map((r) => r.infoId);
+  if (!ids.length) return;
+  await delLoginInfo(ids);
   MessagePlugin.success('删除成功');
+  selectedKeys.value = [];
+  selectedRows.value = [];
   getList();
 };
 const handleUnlock = async () => {

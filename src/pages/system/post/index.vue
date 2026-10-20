@@ -17,6 +17,7 @@
           <div class="dept-tree-wrap">
             <t-tree
               ref="deptTreeRef"
+              v-model:actived="deptActived"
               :data="filteredDeptTree"
               :keys="{ label: 'label', value: 'id', children: 'children' }"
               activable
@@ -200,6 +201,7 @@ const queryParams = reactive<PostQuery>({
   postCode: '',
   status: '',
   deptId: undefined,
+  belongDeptId: undefined,
 });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
@@ -252,6 +254,8 @@ const resetQuery = () => {
   queryParams.postCode = '';
   queryParams.status = '';
   queryParams.deptId = undefined;
+  queryParams.belongDeptId = undefined;
+  deptActived.value = [];
   handleQuery();
 };
 
@@ -275,6 +279,7 @@ const initForm = (): PostForm => ({
 });
 const form = reactive<PostForm>(initForm());
 const rules: Record<string, FormRule[]> = {
+  deptId: [{ required: true, message: '归属部门不能为空', type: 'error' }],
   postName: [{ required: true, message: '请输入岗位名称', type: 'error' }],
   postCode: [{ required: true, message: '请输入岗位编码', type: 'error' }],
   postSort: [{ required: true, message: '请输入显示顺序', type: 'error' }],
@@ -313,8 +318,12 @@ const filteredDeptTree = computed(() => {
   if (!kw) return deptTreeData.value;
   return filterDeptNode(deptTreeData.value, kw);
 });
+const deptActived = ref<Array<string | number>>([]);
 const onDeptActive = (vals: Array<string | number>) => {
-  queryParams.deptId = vals?.[0];
+  deptActived.value = vals ?? [];
+  // 左侧部门树点击 = 查询该部门及其子部门下的岗位（与原项目 belongDeptId 一致）
+  queryParams.belongDeptId = vals?.[0];
+  queryParams.deptId = undefined;
   queryParams.pageNum = 1;
   getList();
 };

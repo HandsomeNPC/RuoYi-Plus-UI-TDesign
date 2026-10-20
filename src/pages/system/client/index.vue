@@ -99,11 +99,11 @@
         <t-row>
           <t-col :span="6"
             ><t-form-item label="客户端key" name="clientKey"
-              ><t-input v-model="form.clientKey" placeholder="请输入客户端key" /></t-form-item
+              ><t-input v-model="form.clientKey" :disabled="!!form.id" placeholder="请输入客户端key" /></t-form-item
           ></t-col>
           <t-col :span="6"
             ><t-form-item label="客户端秘钥" name="clientSecret"
-              ><t-input v-model="form.clientSecret" placeholder="请输入客户端秘钥" /></t-form-item
+              ><t-input v-model="form.clientSecret" :disabled="!!form.id" placeholder="请输入客户端秘钥" /></t-form-item
           ></t-col>
         </t-row>
         <t-row>
@@ -123,12 +123,16 @@
         <t-row>
           <t-col :span="6"
             ><t-form-item label="活跃超时(s)" name="activeTimeout"
-              ><t-input-number v-model="form.activeTimeout" :min="0" /></t-form-item
-          ></t-col>
+              ><t-input-number v-model="form.activeTimeout" :min="-1"
+            /></t-form-item>
+            <div class="field-tip">-1 表示永不过期</div></t-col
+          >
           <t-col :span="6"
             ><t-form-item label="固定超时(s)" name="timeout"
-              ><t-input-number v-model="form.timeout" :min="0" /></t-form-item
-          ></t-col>
+              ><t-input-number v-model="form.timeout" :min="-1"
+            /></t-form-item>
+            <div class="field-tip">-1 表示永不过期</div></t-col
+          >
         </t-row>
         <t-form-item label="白名单路径" name="accessPath"
           ><t-textarea v-model="form.accessPath" :autosize="{ minRows: 3 }" placeholder="多个用换行分隔，示例：/app/**"
@@ -152,7 +156,7 @@
 
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { computed, reactive, ref } from 'vue';
 
@@ -189,6 +193,8 @@ const columnsData: PrimaryTableCol[] = [
   { colKey: 'deviceType', title: '设备类型', width: 120, align: 'center' },
   { colKey: 'activeTimeout', title: '活跃超时', width: 100, align: 'center' },
   { colKey: 'timeout', title: '固定超时', width: 100, align: 'center' },
+  { colKey: 'accessPath', title: '白名单路径', width: 180, ellipsis: true },
+  { colKey: 'ipWhitelist', title: '白名单IP', width: 160, ellipsis: true },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
@@ -231,15 +237,24 @@ const resetQuery = () => {
   handleQuery();
 };
 
-const handleStatusChange = async (row: ClientVO, v: any) => {
+const handleStatusChange = (row: ClientVO, v: any) => {
   const status = v ? '0' : '1';
-  try {
-    await changeStatus(row.clientId, status);
-    row.status = status;
-    MessagePlugin.success('修改成功');
-  } catch {
-    /* ignore */
-  }
+  const text = v ? '启用' : '停用';
+  const dialog = DialogPlugin.confirm({
+    header: '系统提示',
+    body: `确认要"${text}""${row.clientKey}"客户端吗?`,
+    onConfirm: async () => {
+      dialog.destroy();
+      try {
+        await changeStatus(row.clientId, status);
+        row.status = status;
+        MessagePlugin.success(`${text}成功`);
+      } catch {
+        /* ignore */
+      }
+    },
+    onClose: () => dialog.destroy(),
+  });
 };
 
 const formRef = ref<FormInstanceFunctions>();
@@ -264,6 +279,8 @@ const form = reactive<ClientForm>(initForm());
 const rules: Record<string, FormRule[]> = {
   clientKey: [{ required: true, message: '请输入客户端key', type: 'error' }],
   clientSecret: [{ required: true, message: '请输入客户端秘钥', type: 'error' }],
+  grantTypeList: [{ required: true, message: '请选择授权类型', type: 'error' }],
+  deviceType: [{ required: true, message: '请选择设备类型', type: 'error' }],
 };
 
 const handleAdd = () => {
@@ -337,5 +354,11 @@ getList();
 }
 .toolbar-right {
   margin-left: auto;
+}
+.field-tip {
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  margin-top: -8px;
+  margin-bottom: 8px;
 }
 </style>

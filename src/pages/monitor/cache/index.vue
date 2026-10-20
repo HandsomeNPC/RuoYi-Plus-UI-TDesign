@@ -5,15 +5,16 @@
         <t-card :bordered="false" title="Redis 基本信息">
           <t-descriptions :column="1" bordered>
             <t-descriptions-item label="Redis版本">{{ info?.redis_version || '—' }}</t-descriptions-item>
-            <t-descriptions-item label="运行模式">{{ info?.redis_mode || '—' }}</t-descriptions-item>
+            <t-descriptions-item label="运行模式">{{ redisModeText }}</t-descriptions-item>
             <t-descriptions-item label="端口">{{ info?.tcp_port || '—' }}</t-descriptions-item>
             <t-descriptions-item label="客户端数">{{ info?.connected_clients || '—' }}</t-descriptions-item>
-            <t-descriptions-item label="运行时长(天)">{{ info?.up_time_in_days || '—' }}</t-descriptions-item>
+            <t-descriptions-item label="运行时长(天)">{{ info?.uptime_in_days || '—' }}</t-descriptions-item>
             <t-descriptions-item label="使用内存">{{ info?.used_memory_human || '—' }}</t-descriptions-item>
-            <t-descriptions-item label="使用CPU">{{ info?.used_cpu_user || '—' }}</t-descriptions-item>
+            <t-descriptions-item label="使用CPU">{{ usedCpuText }}</t-descriptions-item>
             <t-descriptions-item label="内存配置">{{ info?.maxmemory_human || '—' }}</t-descriptions-item>
-            <t-descriptions-item label="AOF是否开启">{{ info?.aof_enabled || '—' }}</t-descriptions-item>
+            <t-descriptions-item label="AOF是否开启">{{ aofText }}</t-descriptions-item>
             <t-descriptions-item label="RDB是否成功">{{ info?.rdb_last_bgsave_status || '—' }}</t-descriptions-item>
+            <t-descriptions-item label="网络入口/出口">{{ netText }}</t-descriptions-item>
             <t-descriptions-item label="Key数量">{{ dbSize }}</t-descriptions-item>
           </t-descriptions>
         </t-card>
@@ -32,7 +33,7 @@
 
 <script lang="ts" setup>
 import * as echarts from 'echarts';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import type { CacheVO } from '@/api/monitor/cache/types';
 import { getCache } from '@/api/monitor/cache';
@@ -43,6 +44,18 @@ const loading = ref(false);
 const info = ref<CacheVO['info']>({});
 const dbSize = ref(0);
 const commandStats = ref<Array<{ name: string; value: string }>>([]);
+
+const redisModeText = computed(() =>
+  info.value?.redis_mode === 'standalone' ? '单机' : info.value?.redis_mode ? '集群' : '—',
+);
+const aofText = computed(() => (info.value?.aof_enabled === '0' ? '否' : info.value?.aof_enabled ? '是' : '—'));
+const usedCpuText = computed(() => {
+  const v = info.value?.used_cpu_user_children;
+  return v ? parseFloat(v).toFixed(2) : '—';
+});
+const netText = computed(
+  () => `${info.value?.instantaneous_input_kbps ?? '—'}kps/${info.value?.instantaneous_output_kbps ?? '—'}kps`,
+);
 
 const commandstatsRef = ref<HTMLElement | null>(null);
 const usedmemoryRef = ref<HTMLElement | null>(null);

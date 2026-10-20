@@ -207,8 +207,9 @@ const queryParams = reactive<DeptQuery>({
 
 const columnsData: PrimaryTableCol[] = [
   { colKey: 'deptName', title: '部门名称', width: 200 },
+  { colKey: 'deptCategory', title: '类别编码', width: 160, align: 'center' },
   { colKey: 'orderNum', title: '排序', width: 100, align: 'center' },
-  { colKey: 'leader', title: '负责人', width: 120 },
+  { colKey: 'leaderName', title: '负责人', width: 120 },
   { colKey: 'phone', title: '联系电话', width: 140 },
   { colKey: 'email', title: '邮箱', width: 200, ellipsis: true },
   { colKey: 'status', title: '状态', width: 100, align: 'center' },
@@ -270,8 +271,11 @@ const initForm = (): DeptForm => ({
 const form = reactive<DeptForm>(initForm());
 
 const rules: Record<string, FormRule[]> = {
+  parentId: [{ required: true, message: '请选择上级部门', type: 'error' }],
   deptName: [{ required: true, message: '请输入部门名称', type: 'error' }],
   orderNum: [{ required: true, message: '请输入显示排序', type: 'error' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', type: 'warning' }],
+  email: [{ email: true, message: '请输入正确的邮箱地址', type: 'warning' }],
 };
 
 /** DeptVO 树 → t-tree-select 数据 */
@@ -312,7 +316,8 @@ const handleUpdate = async (row: DeptVO) => {
     status: row.status,
   });
   await loadParentOptions(row.deptId);
-  await loadDeptUsers(form.parentId);
+  // 负责人候选 = 当前部门下的用户（与原项目一致）
+  await loadDeptUsers(row.deptId);
   dialogTitle.value = '修改部门';
   dialogVisible.value = true;
 };

@@ -231,10 +231,13 @@ import type { DictDataForm, DictDataVO } from '@/api/system/dict/data/types';
 import { addData, delData, listData, updateData } from '@/api/system/dict/data';
 import type { DictTypeForm, DictTypeQuery, DictTypeVO } from '@/api/system/dict/type/types';
 import { addType, delType, listType, refreshCache, updateType } from '@/api/system/dict/type';
+import { useDictStore } from '@/store/modules/dict';
 import { download } from '@/utils/request';
 import { parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'SystemDict' });
+
+const dictStore = useDictStore();
 
 // ============== 字典类型 ==============
 const typeList = ref<DictTypeVO[]>([]);
@@ -365,6 +368,8 @@ const onTypeSubmit = async () => {
   try {
     if (typeForm.dictId) {
       await updateType(typeForm);
+      // 清掉旧字典类型缓存，下次渲染重新拉取
+      if (typeForm.dictType) dictStore.removeDict(typeForm.dictType);
       MessagePlugin.success('修改成功');
     } else {
       await addType(typeForm);
@@ -381,6 +386,8 @@ const handleTypeDelete = async (row?: DictTypeVO) => {
   const ids = row ? [row.dictId] : typeSelectedRows.value.map((r) => r.dictId);
   if (!ids.length) return;
   await delType(ids);
+  // 清掉被删字典类型的缓存
+  (row ? [row] : typeSelectedRows.value).forEach((r) => r.dictType && dictStore.removeDict(r.dictType));
   MessagePlugin.success('删除成功');
   typeSelectedKeys.value = [];
   typeSelectedRows.value = [];
@@ -393,6 +400,8 @@ const handleTypeExport = () => {
 
 const handleRefreshCache = async () => {
   await refreshCache();
+  // 清空前端字典缓存，DictTag/DictSelect 才会重新拉取
+  dictStore.cleanDict();
   MessagePlugin.success('刷新缓存成功');
 };
 
@@ -552,6 +561,8 @@ const onDataSubmit = async () => {
       await addData(dataForm);
       MessagePlugin.success('新增成功');
     }
+    // 字典数据变更后清掉该类型缓存
+    if (dataForm.dictType) dictStore.removeDict(dataForm.dictType);
     dataDialogVisible.value = false;
     getDataList();
   } finally {
@@ -561,6 +572,7 @@ const onDataSubmit = async () => {
 
 const handleDataDelete = async (row: DictDataVO) => {
   await delData(row.dictCode);
+  if (currentType.value?.dictType) dictStore.removeDict(currentType.value.dictType);
   MessagePlugin.success('删除成功');
   getDataList();
 };

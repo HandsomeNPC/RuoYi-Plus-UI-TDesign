@@ -62,6 +62,15 @@
       </t-form>
 
       <div class="toolbar">
+        <t-popconfirm content="是否确认删除选中的操作日志?" @confirm="handleDelete()">
+          <t-button
+            v-hasPermi="['monitor:operlog:remove']"
+            :disabled="!selectedRows.length"
+            theme="danger"
+            variant="outline"
+            ><template #icon><delete-icon /></template>删除</t-button
+          >
+        </t-popconfirm>
         <t-button v-hasPermi="['monitor:operlog:export']" theme="warning" variant="outline" @click="handleExport"
           ><template #icon><download-icon /></template>导出</t-button
         >
@@ -77,12 +86,16 @@
       <t-table
         :columns="realColumns"
         :data="listData"
+        :default-sort="defaultSort"
         :loading="loading"
         :pagination="pagination"
+        :selected-row-keys="selectedKeys"
         hover
         row-key="operId"
         stripe
+        @select-change="onSelectChange"
         @page-change="onPageChange"
+        @sort-change="onSortChange"
       >
         <template #businessType="{ row }"><dict-tag :options="sys_oper_type" :value="row.businessType" /></template>
         <template #status="{ row }"><dict-tag :options="sys_common_status" :value="row.status" /></template>
@@ -101,18 +114,37 @@
       </t-table>
     </t-card>
 
-    <t-drawer v-model:visible="detailVisible" header="操作日志详细" size="500px">
+    <t-drawer v-model:visible="detailVisible" :footer="false" header="操作日志详细" size="500px">
       <t-descriptions v-if="current" :column="1" bordered>
         <t-descriptions-item label="操作模块">{{ current.title }}</t-descriptions-item>
         <t-descriptions-item label="请求方法">{{ current.method }}</t-descriptions-item>
         <t-descriptions-item label="请求方式">{{ current.requestMethod }}</t-descriptions-item>
         <t-descriptions-item label="操作人员">{{ current.operName }}</t-descriptions-item>
+        <t-descriptions-item label="部门名称">{{ current.deptName || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="客户端">{{ current.clientKey || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="设备类型"
+          ><dict-tag :options="sys_device_type" :value="current.deviceType"
+        /></t-descriptions-item>
+        <t-descriptions-item label="操作系统">{{ current.os || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="浏览器">{{ current.browser || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="操作类型"
+          ><dict-tag :options="sys_oper_type" :value="current.businessType"
+        /></t-descriptions-item>
+        <t-descriptions-item label="操作状态">
+          <dict-tag :options="sys_common_status" :value="current.status" />
+        </t-descriptions-item>
         <t-descriptions-item label="操作IP">{{ current.operIp }}</t-descriptions-item>
         <t-descriptions-item label="操作地点">{{ current.operLocation }}</t-descriptions-item>
         <t-descriptions-item label="请求地址">{{ current.operUrl }}</t-descriptions-item>
-        <t-descriptions-item label="请求参数">{{ current.operParam }}</t-descriptions-item>
-        <t-descriptions-item label="返回结果">{{ current.jsonResult }}</t-descriptions-item>
-        <t-descriptions-item label="错误消息">{{ current.errorMsg }}</t-descriptions-item>
+        <t-descriptions-item label="请求参数">
+          <pre class="json-block">{{ prettyJson(current.operParam) }}</pre>
+        </t-descriptions-item>
+        <t-descriptions-item label="返回结果">
+          <pre class="json-block">{{ prettyJson(current.jsonResult) }}</pre>
+        </t-descriptions-item>
+        <t-descriptions-item v-if="Number(current.status) === 1" label="错误消息">{{
+          current.errorMsg
+        }}</t-descriptions-item>
         <t-descriptions-item label="操作时间">{{ parseTime(current.operTime) }}</t-descriptions-item>
         <t-descriptions-item label="耗时(ms)">{{ current.costTime }}</t-descriptions-item>
       </t-descriptions>
@@ -147,6 +179,18 @@ const loading = ref(false);
 const detailVisible = ref(false);
 const current = ref<OperLogVO | null>(null);
 const showSearch = ref(true);
+const selectedKeys = ref<(string | number)[]>([]);
+const selectedRows = ref<OperLogVO[]>([]);
+const defaultSort = [{ sortBy: 'operTime', descending: true }];
+
+const prettyJson = (raw?: string) => {
+  if (!raw) return '';
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+};
 
 const queryParams = reactive<OperLogQuery>({
   pageNum: 1,
@@ -160,6 +204,8 @@ const queryParams = reactive<OperLogQuery>({
   browser: '',
   businessType: '',
   status: '',
+  orderByColumn: 'operTime',
+  isAsc: 'desc',
 });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
@@ -167,7 +213,7 @@ const columnsData: PrimaryTableCol[] = [
   { colKey: 'operId', title: '日志编号', width: 90, align: 'center' },
   { colKey: 'title', title: '系统模块', width: 160 },
   { colKey: 'businessType', title: '操作类型', width: 100, align: 'center' },
-  { colKey: 'operName', title: '操作人员', width: 120 },
+  { colKey: 'operName', title: '操作人员', width: 120, sorter: true },
   { colKey: 'deptName', title: '部门名称', width: 160, ellipsis: true },
   { colKey: 'operIp', title: '主机', width: 140 },
   { colKey: 'operLocation', title: '操作地点', width: 160, ellipsis: true },
@@ -176,8 +222,8 @@ const columnsData: PrimaryTableCol[] = [
   { colKey: 'os', title: '操作系统', width: 130, ellipsis: true },
   { colKey: 'browser', title: '浏览器', width: 130, ellipsis: true },
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
-  { colKey: 'operTime', title: '操作时间', width: 180 },
-  { colKey: 'costTime', title: '消耗(ms)', width: 100, align: 'center' },
+  { colKey: 'operTime', title: '操作时间', width: 180, sorter: true },
+  { colKey: 'costTime', title: '消耗(ms)', width: 100, align: 'center', sorter: true },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
 const columns = ref<PrimaryTableCol[]>(columnsData);
@@ -198,6 +244,22 @@ const getList = async () => {
   } finally {
     loading.value = false;
   }
+};
+const onSelectChange = (keys: (string | number)[], options: any) => {
+  selectedKeys.value = keys;
+  selectedRows.value = options?.selectedRowData ?? [];
+};
+const onSortChange = (sort: any) => {
+  const s = Array.isArray(sort) ? sort[0] : sort;
+  if (s?.sortBy) {
+    queryParams.orderByColumn = s.sortBy;
+    queryParams.isAsc = s.descending ? 'desc' : 'asc';
+  } else {
+    queryParams.orderByColumn = 'operTime';
+    queryParams.isAsc = 'desc';
+  }
+  queryParams.pageNum = 1;
+  getList();
 };
 const onPageChange = (p: PageInfo) => {
   queryParams.pageNum = p.current;
@@ -226,9 +288,13 @@ const handleDetail = (row: OperLogVO) => {
   current.value = row;
   detailVisible.value = true;
 };
-const handleDelete = async (row: OperLogVO) => {
-  await delOperlog(row.operId);
+const handleDelete = async (row?: OperLogVO) => {
+  const ids = row ? [row.operId] : selectedRows.value.map((r) => r.operId);
+  if (!ids.length) return;
+  await delOperlog(ids);
   MessagePlugin.success('删除成功');
+  selectedKeys.value = [];
+  selectedRows.value = [];
   getList();
 };
 const handleClean = async () => {
@@ -254,5 +320,17 @@ getList();
 }
 .toolbar-right {
   margin-left: auto;
+}
+.json-block {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-default);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

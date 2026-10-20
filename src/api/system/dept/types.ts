@@ -16,6 +16,7 @@ export interface DeptVO extends BaseEntity {
   deptCategory: string;
   orderNum: number;
   leader: string;
+  leaderName: string;
   phone: string;
   email: string;
   status: string;

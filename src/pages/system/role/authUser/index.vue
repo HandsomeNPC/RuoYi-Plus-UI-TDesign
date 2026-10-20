@@ -4,10 +4,13 @@
       <template #title>
         <span>授权用户 - {{ role?.roleName || '' }}</span>
       </template>
+      <template #actions>
+        <t-button theme="default" variant="outline" @click="close">返回</t-button>
+      </template>
 
       <t-row :gutter="12">
         <!-- 已授权 -->
-        <t-col :lg="12" :xs="24">
+        <t-col :lg="6" :xs="12">
           <t-card :bordered="false" title="已授权用户">
             <t-form :data="allocQuery" layout="inline" @submit="loadAlloc">
               <t-form-item label="用户名称" name="userName"
@@ -52,7 +55,7 @@
         </t-col>
 
         <!-- 未授权 -->
-        <t-col :lg="12" :xs="24">
+        <t-col :lg="6" :xs="12">
           <t-card :bordered="false" title="未授权用户">
             <t-form :data="unallocQuery" layout="inline" @submit="loadUnalloc">
               <t-form-item label="用户名称" name="userName"
@@ -117,6 +120,7 @@ import {
   getRole,
   unallocatedUserList,
 } from '@/api/system/role';
+import { getTabsRouterStore } from '@/store/modules/tabs-router';
 import { useDict } from '@/utils/dict';
 
 defineOptions({ name: 'RoleAuthUser' });
@@ -124,6 +128,12 @@ defineOptions({ name: 'RoleAuthUser' });
 const route = useRoute();
 const router = useRouter();
 const roleId = String(route.params.roleId);
+
+/** 返回：关闭当前授权标签并回到角色列表 */
+const close = () => {
+  getTabsRouterStore().removeTabByPath(route.fullPath);
+  router.replace('/system/role');
+};
 
 const { sys_normal_disable } = useDict('sys_normal_disable');
 

@@ -189,6 +189,7 @@ const initForm = (): TreeForm => ({
 const form = reactive<TreeForm>(initForm());
 const rules: Record<string, FormRule[]> = {
   treeName: [{ required: true, message: '请输入树节点名', type: 'error' }],
+  orderNum: [{ required: true, message: '请输入显示排序', type: 'error' }],
 };
 
 /** 构造父节点下拉树：根「顶级」+ 后端扁平数据组装树 */

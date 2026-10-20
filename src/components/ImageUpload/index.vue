@@ -2,17 +2,22 @@
   <div class="image-upload">
     <t-upload
       v-model="fileList"
-      :abridge-name="[6, 6]"
       :accept="accept"
       :auto-upload="true"
+      :disabled="disabled"
       :limit="limit"
       :max="maxCount"
+      :multiple="maxCount > 1"
       :request-method="customUpload"
       :show-upload-progress="true"
-      :theme="multiple ? 'image' : 'image'"
+      :size-limit="{ size: fileSize, unit: 'MB' }"
+      :theme="maxCount > 1 ? 'image' : 'image'"
       :trigger-props="{ theme: 'primary' }"
-      @remove="onRemove"
+      @validate="onValidate"
     />
+    <div v-if="isShowTip" class="upload-tip">
+      支持 {{ accept === 'image/*' ? '图片' : accept }} 格式，单张不超过 {{ fileSize }}MB，最多 {{ maxCount }} 张
+    </div>
   </div>
 </template>
 
@@ -29,22 +34,26 @@ interface Props {
   /** 允许上传数量上限 */
   limit?: number;
   accept?: string;
+  /** 单文件大小限制(MB) */
+  fileSize?: number;
+  disabled?: boolean;
+  isShowTip?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   limit: 1,
   accept: 'image/*',
+  fileSize: 5,
+  disabled: false,
+  isShowTip: false,
 });
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>();
 
 const maxCount = props.limit;
-const multiple = props.limit > 1;
 const fileList = ref<UploadFile[]>([]);
 
 const customUpload = async (file: UploadFile | UploadFile[]): Promise<RequestMethodResponse> => {
-  // multiple=true 时 TDesign 传 UploadFile[]（逐文件上传也是 [file]）；单文件模式传单个对象。
-  // 统一归一化为数组，取首个文件的 raw 上传，并把 ossId 回填到对应的 UploadFile 对象上。
   const files = Array.isArray(file) ? file : [file];
   const target = files[0];
   const raw = target?.raw as File | undefined;
@@ -57,9 +66,10 @@ const customUpload = async (file: UploadFile | UploadFile[]): Promise<RequestMet
     const res: any = await uploadOss(formData);
     const data = res?.data;
     if (data?.ossId) {
-      // 把返回的 ossId 写入文件对象，提交时读取
+      // ossId 回填到文件对象；emit 交给 fileList watcher（避免 TDesign 写入前 emit 漏掉新文件）
       (target as any).ossId = data.ossId;
-      emitChange();
+      (target as any).url = data.url;
+      (target as any).name = data.fileName || target.name;
       return { status: 'success', response: { url: data.url, ossId: data.ossId, fileName: data.fileName } };
     }
     return { status: 'fail', error: '上传失败', response: {} };
@@ -68,20 +78,36 @@ const customUpload = async (file: UploadFile | UploadFile[]): Promise<RequestMet
   }
 };
 
-const onRemove = () => {
-  emitChange();
+const onValidate = (ctx: any) => {
+  if (ctx?.type === 'FILE_OVER_SIZE_LIMIT') {
+    MessagePlugin.error(`图片大小不能超过 ${props.fileSize}MB`);
+  }
 };
 
-const collectIds = () =>
-  fileList.value
-    .map((f: any) => f.ossId)
+watch(
+  fileList,
+  (arr) => {
+    const ids = arr
+      .map((f: any) => f.ossId)
+      .filter(Boolean)
+      .join(',');
+    if (ids !== props.modelValue) emit('update:modelValue', ids);
+  },
+  { deep: true },
+);
+
+let loadingExternal = false;
+const loadExisting = async () => {
+  if (!props.modelValue) {
+    fileList.value = [];
+    return;
+  }
+  const currentIds = fileList.value
+    .map((f: any) => String(f.ossId))
     .filter(Boolean)
     .join(',');
-
-const emitChange = () => emit('update:modelValue', collectIds());
-
-const loadExisting = async () => {
-  if (!props.modelValue) return;
+  if (currentIds === props.modelValue) return;
+  loadingExternal = true;
   try {
     const res = await listByIds(props.modelValue);
     const data = (res?.data ?? []) as any[];
@@ -93,22 +119,22 @@ const loadExisting = async () => {
     }));
   } catch (e) {
     console.error(e);
+  } finally {
+    loadingExternal = false;
   }
 };
 
 onMounted(loadExisting);
 watch(
   () => props.modelValue,
-  (v) => {
-    // 外部清空时同步
-    if (!v && fileList.value.length) fileList.value = [];
+  () => {
+    if (!loadingExternal) loadExisting();
   },
 );
 
-// 兜底：上传失败提示
 watch(fileList, (arr) => {
   if (arr.some((f: any) => f.status === 'fail')) {
-    MessagePlugin.error('部分文件上传失败');
+    MessagePlugin.error('部分图片上传失败');
   }
 });
 </script>
@@ -116,5 +142,10 @@ watch(fileList, (arr) => {
 <style scoped>
 .image-upload :deep(.t-upload__card) {
   width: auto;
+}
+.upload-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
 }
 </style>

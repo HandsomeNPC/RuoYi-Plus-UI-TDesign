@@ -65,7 +65,7 @@
           ><template #icon><setting-icon /></template>配置管理</t-button
         >
         <t-button
-          v-hasPermi="['system:ossConfig:edit']"
+          v-hasPermi="['system:oss:edit']"
           :loading="previewLoading"
           theme="default"
           variant="outline"
@@ -113,7 +113,7 @@
             <t-link v-if="isImage(row.fileSuffix)" hover="color" theme="primary" @click="handlePreview(row)"
               >预览</t-link
             >
-            <t-link v-hasPermi="['system:oss:download']" :href="row.url" hover="color" target="_blank" theme="primary"
+            <t-link v-hasPermi="['system:oss:download']" hover="color" theme="primary" @click="handleDownload(row)"
               >下载</t-link
             >
             <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
@@ -149,6 +149,7 @@ import type { OssQuery, OssVO } from '@/api/system/oss/types';
 import { delOss, listOss, uploadOss } from '@/api/system/oss';
 import { getConfigKey, updateConfigByKey } from '@/api/system/config';
 import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
+import { downloadOss } from '@/utils/request';
 import { getToken } from '@/utils/auth';
 import { parseTime } from '@/utils/ruoyi';
 
@@ -156,17 +157,19 @@ defineOptions({ name: 'SystemOss' });
 
 const router = useRouter();
 
-const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
+const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery('CreateTime');
 
-// 预览开关：读写参数 sys.oss.previewListResource（true/false）
-const previewListResource = ref(false);
+// 预览开关：读写参数 sys.oss.previewListResource（true/false，缺省时默认开启）
+const previewListResource = ref(true);
 const previewLoading = ref(false);
 const loadPreviewConfig = async () => {
   try {
     const res = await getConfigKey('sys.oss.previewListResource');
-    previewListResource.value = (res?.data as string) === 'true';
+    const val = res?.data as string;
+    // 后端未配置时默认开启（与原项目一致）
+    previewListResource.value = val === null || val === undefined || val === '' ? true : val === 'true';
   } catch {
-    previewListResource.value = false;
+    previewListResource.value = true;
   }
 };
 const togglePreview = async () => {
@@ -304,6 +307,8 @@ const handlePreview = (row: OssVO) => {
   previewUrl.value = row.url;
   previewVisible.value = true;
 };
+
+const handleDownload = (row: OssVO) => downloadOss(row.ossId);
 
 const handleDelete = async (row?: OssVO) => {
   const ids = row ? [row.ossId] : selectedRows.value.map((r) => r.ossId);

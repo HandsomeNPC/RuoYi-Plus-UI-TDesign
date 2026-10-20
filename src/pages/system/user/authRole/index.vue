@@ -48,6 +48,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import type { RoleVO } from '@/api/system/role/types';
 import { getAuthRole, updateAuthRole } from '@/api/system/user';
+import { getTabsRouterStore } from '@/store/modules/tabs-router';
 import { useDict } from '@/utils/dict';
 import { parseTime } from '@/utils/ruoyi';
 
@@ -117,7 +118,11 @@ const handleSubmit = async () => {
   }
 };
 
-const close = () => router.go(-1);
+/** 提交/返回：关闭当前授权标签并回到用户列表 */
+const close = () => {
+  getTabsRouterStore().removeTabByPath(route.fullPath);
+  router.replace('/system/user');
+};
 
 load();
 </script>

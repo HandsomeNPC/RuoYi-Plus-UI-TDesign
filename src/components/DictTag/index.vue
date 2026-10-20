@@ -2,10 +2,15 @@
   <span v-if="!values.length">{{ unmatch && showValue ? unmatchText : '' }}</span>
   <t-space v-else :size="4" break-line>
     <template v-for="item in matched" :key="item.value">
-      <t-tag v-if="hasTagTheme(item.elTagType)" :theme="tagTheme(item.elTagType)" variant="light-outline">
+      <t-tag
+        v-if="hasTagTheme(item.elTagType)"
+        :class="item.elTagClass"
+        :theme="tagTheme(item.elTagType)"
+        variant="light-outline"
+      >
         {{ item.label }}
       </t-tag>
-      <span v-else>{{ item.label + ' ' }}</span>
+      <span v-else :class="item.elTagClass">{{ item.label + ' ' }}</span>
     </template>
     <span v-if="unmatch && showValue" class="dict-tag-unmatch">{{ unmatchText }}</span>
   </t-space>

@@ -18,4 +18,6 @@ export interface LoginInfoQuery extends PageQuery {
   status?: string;
   clientKey?: string;
   deviceType?: string;
+  orderByColumn?: string;
+  isAsc?: string;
 }

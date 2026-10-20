@@ -264,6 +264,7 @@
         checkable
         expand-all
         hover
+        value-mode="all"
       />
       <div class="cascade-tip">勾选要级联删除的菜单节点（含子节点），不可恢复。</div>
     </t-dialog>
@@ -374,6 +375,7 @@ const initForm = (): MenuForm => ({
   icon: '',
   remark: '',
   perms: '',
+  activeMenu: '',
 });
 
 const form = reactive<MenuForm>(initForm());
@@ -381,6 +383,13 @@ const form = reactive<MenuForm>(initForm());
 const rules: Record<string, FormRule[]> = {
   menuName: [{ required: true, message: '请输入菜单名称', type: 'error' }],
   orderNum: [{ required: true, message: '请输入显示排序', type: 'error' }],
+  path: [
+    {
+      validator: (val) => (form.menuType !== 'F' ? !!val : true),
+      message: '请输入路由地址',
+      type: 'error',
+    },
+  ],
 };
 
 /** MenuTreeOption → t-tree-select 数据 */
@@ -424,6 +433,7 @@ const handleUpdate = async (row: MenuVO) => {
     icon: row.icon,
     remark: row.remark,
     perms: row.perms,
+    activeMenu: row.activeMenu ?? '',
   });
   await loadParentOptions();
   dialogTitle.value = '修改菜单';

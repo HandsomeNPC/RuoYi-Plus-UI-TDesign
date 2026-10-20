@@ -92,7 +92,10 @@ function getMenuList(source: MenuRoute[], basePath?: string): MenuRoute[] {
     if (item.meta?.hidden === true) return;
 
     const itemPath = String(item.path ?? '');
-    const external = isExternal(itemPath) || !!item.meta?.link || !!item.meta?.frameSrc;
+    // 外链判定：仅 path 本身是 http(s):// 才用 window.open；
+    // meta.link 也存在于「内链」菜单（component=InnerLink，path 是普通路由），
+    // 内链应走路由由 InnerLink 组件在系统内渲染 iframe，不能当外链处理。
+    const external = isExternal(itemPath);
     const resolvedPath = external
       ? itemPath
       : basePath && !itemPath.includes(basePath)
@@ -124,7 +127,7 @@ function getMenuList(source: MenuRoute[], basePath?: string): MenuRoute[] {
       redirect: item.redirect,
       query,
       isExternal: external,
-      href: external ? (item.meta?.link as string) || (item.meta?.frameSrc as string) || itemPath : undefined,
+      href: external ? itemPath : undefined,
     };
 
     // 单可见子节点提升：父级只有一个叶子子节点、且未声明 alwaysShow 时，提升为单项

@@ -81,6 +81,13 @@ export const useTabsRouterStore = defineStore('tabsRouter', {
       // 保留首页固定标签
       this.tabRouterList = [...homeRoute];
     },
+    /** 按路径移除单个标签（提交后返回父页时清理当前编辑标签） */
+    removeTabByPath(path: string) {
+      if (!path) return;
+      const idx = this.tabRouterList.findIndex((r) => r.path === path);
+      if (idx === -1) return;
+      this.tabRouterList = this.tabRouterList.slice(0, idx).concat(this.tabRouterList.slice(idx + 1));
+    },
     initTabRouterList(newRoutes: TRouterInfo[]) {
       newRoutes?.forEach((route: TRouterInfo) => this.appendTabRouterList(route));
     },

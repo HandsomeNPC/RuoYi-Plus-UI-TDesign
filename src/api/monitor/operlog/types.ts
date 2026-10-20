@@ -8,6 +8,8 @@ export interface OperLogQuery extends PageQuery {
   deviceType?: string;
   os?: string;
   browser?: string;
+  orderByColumn?: string;
+  isAsc?: string;
 }
 
 export interface OperLogVO extends BaseEntity {

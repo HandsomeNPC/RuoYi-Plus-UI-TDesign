@@ -230,6 +230,9 @@ const form = reactive<DemoForm>(initForm());
 const rules: Record<string, FormRule[]> = {
   testKey: [{ required: true, message: '请输入key键', type: 'error' }],
   value: [{ required: true, message: '请输入值', type: 'error' }],
+  deptId: [{ required: true, message: '请输入部门id', type: 'error' }],
+  userId: [{ required: true, message: '请输入用户id', type: 'error' }],
+  orderNum: [{ required: true, message: '请输入显示排序', type: 'error' }],
 };
 
 const handleAdd = () => {

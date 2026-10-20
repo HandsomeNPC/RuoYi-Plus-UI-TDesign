@@ -6,7 +6,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 import { getToken } from '@/utils/auth';
-import { isHandledRequestError } from '@/utils/request';
+import { isHandledRequestError, isRelogin } from '@/utils/request';
 import { filterExternalRoutes } from '@/utils/ruoyi';
 import { closePush, initMessageBox, initPush } from '@/utils/push';
 
@@ -37,10 +37,17 @@ router.beforeEach(async (to, _from) => {
 
       // 判断当前用户是否已拉取完 user_info 信息
       if (userStore.roles.length === 0) {
-        await userStore.getInfo();
-        // 启动统一消息推送（SSE/WebSocket，仅首次进入时初始化）
-        initMessageBox();
-        initPush();
+        // 带过期 token 刷新页面时，getInfo 会 401：先置 isRelogin 抑制拦截器的重新登录弹窗，
+        // 由下方 catch 统一跳登录页，避免「跳登录页 + 弹过期提示」双重打扰
+        isRelogin.show = true;
+        try {
+          await userStore.getInfo();
+          // 启动统一消息推送（SSE/WebSocket，仅首次进入时初始化）
+          initMessageBox();
+          initPush();
+        } finally {
+          isRelogin.show = false;
+        }
       }
 
       // 根据权限生成可访问的路由表
@@ -77,6 +84,17 @@ router.beforeEach(async (to, _from) => {
   return { path: '/login', query: { redirect: to.fullPath } };
 });
 
-router.afterEach(() => {
+router.afterEach((to, _from) => {
   NProgress.done();
+  // 动态浏览器标题：首页显示系统名，其余「页面标题 - 系统名」
+  const appTitle = import.meta.env.VITE_APP_TITLE || 'RuoYi-Vue-Plus后台管理系统';
+  const matched = to.matched;
+  let pageTitle: string | undefined;
+  for (let i = matched.length - 1; i >= 0; i--) {
+    const t = matched[i].meta?.title as any;
+    if (t && typeof t === 'object') pageTitle = t.zh_CN || t.en_US;
+    else if (typeof t === 'string' && t) pageTitle = t;
+    if (pageTitle) break;
+  }
+  document.title = pageTitle ? `${pageTitle} - ${appTitle}` : appTitle;
 });

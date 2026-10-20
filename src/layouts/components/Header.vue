@@ -44,7 +44,8 @@
             </template>
             <t-button class="header-user-btn" theme="default" variant="text">
               <template #icon>
-                <t-icon class="header-user-avatar" name="user-circle" />
+                <t-avatar v-if="user.avatar" :image="user.avatar" class="header-user-avatar" size="32px" />
+                <t-icon v-else class="header-user-avatar" name="user-circle" />
               </template>
               <div class="header-user-account">{{ user.userInfo.name }}</div>
               <template #suffix><chevron-down-icon /></template>
@@ -62,6 +63,7 @@
 </template>
 <script setup lang="ts">
 import { ChevronDownIcon, PoweroffIcon, SettingIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
+import { DialogPlugin } from 'tdesign-vue-next';
 import type { PropType } from 'vue';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -73,7 +75,6 @@ import { prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
 import { useSettingStore, useUserStore } from '@/store';
-import { closePush } from '@/utils/push';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';
@@ -142,12 +143,20 @@ const handleNav = (url: string) => {
   router.push(url);
 };
 
-const handleLogout = async () => {
-  closePush();
-  await user.logout();
-  router.push({
-    path: '/login',
-    query: { redirect: router.currentRoute.value.fullPath },
+const handleLogout = () => {
+  const dialog = DialogPlugin.confirm({
+    header: '系统提示',
+    body: '确认要退出登录吗？',
+    confirmBtn: { content: '确定', theme: 'primary' },
+    onConfirm: async () => {
+      dialog.destroy();
+      await user.logout();
+      router.push({
+        path: '/login',
+        query: { redirect: encodeURIComponent(router.currentRoute.value.fullPath || '/') },
+      });
+    },
+    onClose: () => dialog.destroy(),
   });
 };
 
