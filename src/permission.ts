@@ -7,6 +7,7 @@ import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
 import { getToken } from '@/utils/auth';
 import { isHandledRequestError } from '@/utils/request';
+import { filterExternalRoutes } from '@/utils/ruoyi';
 import { closePush, initMessageBox, initPush } from '@/utils/push';
 
 NProgress.configure({ showSpinner: false });
@@ -45,7 +46,10 @@ router.beforeEach(async (to, _from) => {
       // 根据权限生成可访问的路由表
       if (permissionStore.asyncRoutes.length === 0) {
         const accessRoutes = await permissionStore.buildAsyncRoutes();
-        accessRoutes.forEach((route) => {
+        // 过滤掉 path 为外链(http(s)://)的路由：外链由侧边栏 MenuContent 用 window.open 打开，
+        // 注册为真实路由会触发 vue-router "Route paths should start with a '/'" 警告。
+        // sidebar 仍使用完整的 permissionStore.routers（含外链），不受此过滤影响。
+        filterExternalRoutes(accessRoutes).forEach((route) => {
           router.addRoute(route);
         });
         // hack：确保 addRoute 完成后重新匹配

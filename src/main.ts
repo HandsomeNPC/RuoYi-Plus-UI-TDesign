@@ -10,6 +10,10 @@ import ImageUpload from '@/components/ImageUpload/index.vue';
 import FileUpload from '@/components/FileUpload/index.vue';
 import Editor from '@/components/Editor/index.vue';
 import RightToolbar from '@/components/RightToolbar/index.vue';
+import TreePanel from '@/components/TreePanel/index.vue';
+import UserSelect from '@/components/UserSelect/index.vue';
+import RoleSelect from '@/components/RoleSelect/index.vue';
+import ImagePreview from '@/components/ImagePreview/index.vue';
 import App from './App.vue';
 import directive from './directive';
 import router from './router';
@@ -56,6 +60,16 @@ app.component('editor', Editor);
 // 全局表格右侧工具栏（搜索切换 / 刷新 / 列显隐）
 app.component('RightToolbar', RightToolbar);
 app.component('right-toolbar', RightToolbar);
+
+// 全局可复用业务组件：左侧树面板 / 选人弹窗 / 选角色弹窗 / 图片预览
+app.component('TreePanel', TreePanel);
+app.component('tree-panel', TreePanel);
+app.component('UserSelect', UserSelect);
+app.component('user-select', UserSelect);
+app.component('RoleSelect', RoleSelect);
+app.component('role-select', RoleSelect);
+app.component('ImagePreview', ImagePreview);
+app.component('image-preview', ImagePreview);
 
 // 全局自定义指令（v-hasPermi / v-hasRoles）
 directive(app);

@@ -225,6 +225,18 @@ export const isHttp = (url: string): boolean => {
   return /^http(s)?:\/\//.test(url);
 };
 
+/**
+ * 过滤掉 path 为外链(http(s)://)的路由，避免 router.addRoute 触发
+ * "Route paths should start with a '/'" 警告。
+ * 外链菜单由侧边栏 MenuContent 用 window.open 打开，无需注册为真实路由。
+ * 仅作用于 addRoute 前的过滤，不影响 sidebar 的 permissionStore.routers（仍含外链）。
+ */
+export function filterExternalRoutes<T extends { path?: string; children?: T[] }>(routes: T[] = []): T[] {
+  return routes
+    .filter((r) => r.path && !isHttp(String(r.path)))
+    .map((r) => (r.children?.length ? { ...r, children: filterExternalRoutes(r.children) } : r));
+}
+
 // 返回项目路径
 export const getNormalPath = (p: string): string => {
   if (p.length === 0 || !p || p === 'undefined') {
