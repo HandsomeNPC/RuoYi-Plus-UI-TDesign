@@ -17,29 +17,20 @@ const route = useRoute();
 
 const renderTitle = (title?: LocalizedTitle, fallback?: string) => {
   if (!title) return fallback || '';
+  if (typeof title === 'string') return title;
   return title[locale.value as keyof LocalizedTitle] || fallback || '';
 };
 
-const crumbs = computed(() => {
-  const pathArray = route.path.split('/');
-  pathArray.shift();
-
-  const breadcrumbs = pathArray.reduce((breadcrumbArray: { path: string; to: string; title: string }[], path, idx) => {
-    // 如果路由下有hiddenBreadcrumb或当前遍历到参数则隐藏
-    const meta = route.matched[idx]?.meta;
-    if (meta?.hiddenBreadcrumb || Object.values(route.params).includes(path)) {
-      return breadcrumbArray;
-    }
-    const title = renderTitle(meta?.title as LocalizedTitle, path);
-    breadcrumbArray.push({
-      path,
-      to: breadcrumbArray[idx - 1] ? `${breadcrumbArray[idx - 1].to}/${path}` : `/${path}`,
-      title,
-    });
-    return breadcrumbArray;
-  }, []);
-  return breadcrumbs;
-});
+// 直接基于 route.matched 构建：Vue Router 已按层级填充 matched，
+// 避免原来按 path 段 + matched[idx] 索引在深嵌套/带参路由下错位。
+const crumbs = computed(() =>
+  (route.matched || [])
+    .filter((m) => !m.meta?.hiddenBreadcrumb && m.meta?.title)
+    .map((m) => ({
+      to: m.path,
+      title: renderTitle(m.meta.title as LocalizedTitle),
+    })),
+);
 </script>
 <style scoped>
 .tdesign-breadcrumb {

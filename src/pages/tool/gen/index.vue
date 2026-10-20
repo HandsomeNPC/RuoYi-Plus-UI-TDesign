@@ -3,7 +3,7 @@
     <t-card :bordered="false">
       <template #title><div class="card-title">代码生成</div></template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="表名称" name="tableName"
           ><t-input v-model="queryParams.tableName" clearable placeholder="请输入表名称"
         /></t-form-item>
@@ -42,10 +42,17 @@
           @click="handleBatchGen"
           ><template #icon><download-icon /></template>批量生成</t-button
         >
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="tool_gen_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="list"
         :loading="loading"
         :pagination="pagination"
@@ -129,18 +136,18 @@
         <t-tab-panel label="基本信息" value="basic">
           <t-form :data="editForm" label-width="120px">
             <t-row>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="表名称"><t-input v-model="editForm.tableName" /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="表描述"><t-input v-model="editForm.tableComment" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="实体类名称"><t-input v-model="editForm.className" /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="作者"><t-input v-model="editForm.functionAuthor" /></t-form-item
               ></t-col>
             </t-row>
@@ -172,42 +179,42 @@
         <t-tab-panel label="生成信息" value="gen">
           <t-form :data="editForm" label-width="120px">
             <t-row>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="生成模板"
                   ><t-select v-model="editForm.tplCategory" :options="tplOptions" /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="前端模板"
                   ><t-select v-model="editForm.frontendType" :options="frontendOptions" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="生成包路径"><t-input v-model="editForm.packageName" /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="生成模块名"><t-input v-model="editForm.moduleName" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="生成业务名"><t-input v-model="editForm.businessName" /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="生成功能名"><t-input v-model="editForm.functionName" /></t-form-item
               ></t-col>
             </t-row>
             <t-row>
-              <t-col :span="6"
+              <t-col :span="3"
                 ><t-form-item label="启用导出"><t-switch v-model="editForm.enableExport" /></t-form-item
               ></t-col>
-              <t-col :span="6"
+              <t-col :span="3"
                 ><t-form-item label="启用状态"><t-switch v-model="editForm.enableStatus" /></t-form-item
               ></t-col>
-              <t-col :span="6"
+              <t-col :span="3"
                 ><t-form-item label="启用排序"><t-switch v-model="editForm.enableSort" /></t-form-item
               ></t-col>
-              <t-col :span="6"
+              <t-col :span="3"
                 ><t-form-item label="启用唯一"><t-switch v-model="editForm.enableUnique" /></t-form-item
               ></t-col>
             </t-row>
@@ -239,11 +246,11 @@
               ></t-col>
             </t-row>
             <t-row v-if="editForm.tplCategory === 'tree'">
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="树编码字段"
                   ><t-select v-model="editForm.treeCode" :options="columnOptions" clearable filterable /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="树父编码"
                   ><t-select
                     v-model="editForm.treeParentCode"
@@ -253,17 +260,17 @@
               ></t-col>
             </t-row>
             <t-row v-if="editForm.tplCategory === 'tree'">
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="树名称字段"
                   ><t-select v-model="editForm.treeName" :options="columnOptions" clearable filterable /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="树根值"
                   ><t-input v-model="editForm.treeRootValue" placeholder="如 0" /></t-form-item
               ></t-col>
             </t-row>
             <t-row v-if="editForm.tplCategory === 'tree'">
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="祖级字段"
                   ><t-select
                     v-model="editForm.treeAncestorsField"
@@ -271,7 +278,7 @@
                     clearable
                     filterable /></t-form-item
               ></t-col>
-              <t-col :span="12"
+              <t-col :span="6"
                 ><t-form-item label="树排序字段"
                   ><t-select
                     v-model="editForm.treeOrderField"
@@ -331,11 +338,12 @@ const loading = ref(false);
 const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<TableVO[]>([]);
 const dataNames = ref<string[]>([]);
+const showSearch = ref(true);
 
 const queryParams = reactive<TableQuery>({ pageNum: 1, pageSize: 10, tableName: '', tableComment: '', dataName: '' });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'tableId', title: '序号', width: 80, align: 'center' },
   { colKey: 'tableName', title: '表名称', width: 200 },
@@ -344,6 +352,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 340, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -645,6 +658,9 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 .preview-body {
   height: 100%;

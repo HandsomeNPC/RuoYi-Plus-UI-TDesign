@@ -1,83 +1,121 @@
 <template>
   <div class="post-page">
-    <t-card :bordered="false">
-      <template #title><div class="card-title">岗位管理</div></template>
+    <t-row :gutter="12">
+      <!-- 左侧部门树 -->
+      <t-col :lg="3" :xs="12">
+        <t-card :bordered="false" class="dept-card">
+          <template #title><div class="card-title">部门</div></template>
+          <div class="dept-search">
+            <t-input v-model="deptFilter" clearable placeholder="部门名称">
+              <template #prefix-icon><t-icon name="search" /></template>
+            </t-input>
+            <div class="dept-tree-toggle">
+              <t-button size="small" theme="primary" variant="text" @click="toggleDeptTree(true)">展开全部</t-button>
+              <t-button size="small" theme="primary" variant="text" @click="toggleDeptTree(false)">折叠全部</t-button>
+            </div>
+          </div>
+          <div class="dept-tree-wrap">
+            <t-tree
+              ref="deptTreeRef"
+              :data="filteredDeptTree"
+              :keys="{ label: 'label', value: 'id', children: 'children' }"
+              activable
+              hover
+              @active-change="onDeptActive"
+            />
+          </div>
+        </t-card>
+      </t-col>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
-        <t-form-item label="岗位名称" name="postName">
-          <t-input v-model="queryParams.postName" clearable placeholder="请输入岗位名称" />
-        </t-form-item>
-        <t-form-item label="岗位编码" name="postCode">
-          <t-input v-model="queryParams.postCode" clearable placeholder="请输入岗位编码" />
-        </t-form-item>
-        <t-form-item label="状态" name="status">
-          <dict-select
-            v-model="queryParams.status"
-            placeholder="岗位状态"
-            style="width: 160px"
-            type="sys_normal_disable"
-          />
-        </t-form-item>
-        <t-form-item :style="{ marginLeft: 'auto' }">
-          <t-space>
-            <t-button theme="primary" type="submit"
-              ><template #icon><search-icon /></template>搜索</t-button
-            >
-            <t-button theme="default" @click="resetQuery"
-              ><template #icon><refresh-icon /></template>重置</t-button
-            >
-          </t-space>
-        </t-form-item>
-      </t-form>
+      <!-- 右侧岗位列表 -->
+      <t-col :lg="9" :xs="12">
+        <t-card :bordered="false">
+          <template #title><div class="card-title">岗位管理</div></template>
 
-      <div class="toolbar">
-        <t-button v-hasPermi="['system:post:add']" theme="primary" @click="handleAdd"
-          ><template #icon><add-icon /></template>新增</t-button
-        >
-        <t-button
-          v-hasPermi="['system:post:edit']"
-          :disabled="single"
-          theme="success"
-          variant="outline"
-          @click="handleUpdate()"
-          ><template #icon><edit-icon /></template>修改</t-button
-        >
-        <t-popconfirm content="是否确认删除选中的岗位?" @confirm="handleDelete()">
-          <t-button v-hasPermi="['system:post:remove']" :disabled="multiple" theme="danger" variant="outline"
-            ><template #icon><delete-icon /></template>删除</t-button
-          >
-        </t-popconfirm>
-        <t-button v-hasPermi="['system:post:export']" theme="warning" variant="outline" @click="handleExport"
-          ><template #icon><download-icon /></template>导出</t-button
-        >
-      </div>
+          <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
+            <t-form-item label="岗位名称" name="postName">
+              <t-input v-model="queryParams.postName" clearable placeholder="请输入岗位名称" />
+            </t-form-item>
+            <t-form-item label="岗位编码" name="postCode">
+              <t-input v-model="queryParams.postCode" clearable placeholder="请输入岗位编码" />
+            </t-form-item>
+            <t-form-item label="状态" name="status">
+              <dict-select
+                v-model="queryParams.status"
+                placeholder="岗位状态"
+                style="width: 160px"
+                type="sys_normal_disable"
+              />
+            </t-form-item>
+            <t-form-item :style="{ marginLeft: 'auto' }">
+              <t-space>
+                <t-button theme="primary" type="submit"
+                  ><template #icon><search-icon /></template>搜索</t-button
+                >
+                <t-button theme="default" @click="resetQuery"
+                  ><template #icon><refresh-icon /></template>重置</t-button
+                >
+              </t-space>
+            </t-form-item>
+          </t-form>
 
-      <t-table
-        :columns="columns"
-        :data="list"
-        :loading="loading"
-        :pagination="pagination"
-        :selected-row-keys="selectedKeys"
-        hover
-        row-key="postId"
-        stripe
-        @select-change="onSelectChange"
-        @page-change="onPageChange"
-      >
-        <template #status="{ row }"><dict-tag :options="sys_normal_disable" :value="row.status" /></template>
-        <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
-        <template #operation="{ row }">
-          <t-space size="small">
-            <t-link v-hasPermi="['system:post:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
-              >修改</t-link
+          <div class="toolbar">
+            <t-button v-hasPermi="['system:post:add']" theme="primary" @click="handleAdd"
+              ><template #icon><add-icon /></template>新增</t-button
             >
-            <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
-              <t-link v-hasPermi="['system:post:remove']" hover="color" theme="danger">删除</t-link>
+            <t-button
+              v-hasPermi="['system:post:edit']"
+              :disabled="single"
+              theme="success"
+              variant="outline"
+              @click="handleUpdate()"
+              ><template #icon><edit-icon /></template>修改</t-button
+            >
+            <t-popconfirm content="是否确认删除选中的岗位?" @confirm="handleDelete()">
+              <t-button v-hasPermi="['system:post:remove']" :disabled="multiple" theme="danger" variant="outline"
+                ><template #icon><delete-icon /></template>删除</t-button
+              >
             </t-popconfirm>
-          </t-space>
-        </template>
-      </t-table>
-    </t-card>
+            <t-button v-hasPermi="['system:post:export']" theme="warning" variant="outline" @click="handleExport"
+              ><template #icon><download-icon /></template>导出</t-button
+            >
+            <right-toolbar
+              v-model:show-search="showSearch"
+              :columns="columns"
+              class="toolbar-right"
+              storage-key="sys_post_column_visible"
+              @query-table="getList"
+            />
+          </div>
+
+          <t-table
+            :columns="realColumns"
+            :data="list"
+            :loading="loading"
+            :pagination="pagination"
+            :selected-row-keys="selectedKeys"
+            hover
+            row-key="postId"
+            stripe
+            @select-change="onSelectChange"
+            @page-change="onPageChange"
+          >
+            <template #status="{ row }"><dict-tag :options="sys_normal_disable" :value="row.status" /></template>
+            <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
+            <template #operation="{ row }">
+              <t-space size="small">
+                <t-link v-hasPermi="['system:post:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
+                  >修改</t-link
+                >
+                <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
+                  <t-link v-hasPermi="['system:post:remove']" hover="color" theme="danger">删除</t-link>
+                </t-popconfirm>
+              </t-space>
+            </template>
+          </t-table>
+        </t-card>
+      </t-col>
+    </t-row>
 
     <t-dialog
       v-model:visible="dialogVisible"
@@ -135,7 +173,7 @@
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { computed, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref } from 'vue';
 
 import type { PostForm, PostQuery, PostVO } from '@/api/system/post/types';
 import { addPost, delPost, deptTreeSelect, listPost, updatePost } from '@/api/system/post';
@@ -153,11 +191,19 @@ const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<PostVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+const showSearch = ref(true);
 
-const queryParams = reactive<PostQuery>({ pageNum: 1, pageSize: 10, postName: '', postCode: '', status: '' });
+const queryParams = reactive<PostQuery>({
+  pageNum: 1,
+  pageSize: 10,
+  postName: '',
+  postCode: '',
+  status: '',
+  deptId: undefined,
+});
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'postId', title: '岗位编号', width: 100, align: 'center' },
   { colKey: 'postName', title: '岗位名称', width: 160 },
@@ -168,6 +214,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -200,6 +251,7 @@ const resetQuery = () => {
   queryParams.postName = '';
   queryParams.postCode = '';
   queryParams.status = '';
+  queryParams.deptId = undefined;
   handleQuery();
 };
 
@@ -230,7 +282,41 @@ const rules: Record<string, FormRule[]> = {
 
 const loadDeptOptions = async () => {
   const res = await deptTreeSelect();
-  deptOptions.value = (res?.data ?? []) as any[];
+  const data = (res?.data ?? []) as any[];
+  deptOptions.value = data;
+  deptTreeData.value = data;
+  await nextTick();
+  deptTreeRef.value?.expandAll?.();
+};
+
+// 左侧部门树筛选
+const deptTreeRef = ref();
+const toggleDeptTree = (expand: boolean) => {
+  const inst = deptTreeRef.value;
+  if (expand) inst?.expandAll?.();
+  else inst?.foldAll?.();
+};
+const deptTreeData = ref<any[]>([]);
+const deptFilter = ref('');
+const filterDeptNode = (nodes: any[], kw: string): any[] => {
+  const res: any[] = [];
+  nodes.forEach((n) => {
+    const children = n.children?.length ? filterDeptNode(n.children, kw) : [];
+    if (n.label?.toLowerCase().includes(kw) || children.length) {
+      res.push({ ...n, children: children.length ? children : n.children });
+    }
+  });
+  return res;
+};
+const filteredDeptTree = computed(() => {
+  const kw = deptFilter.value.trim().toLowerCase();
+  if (!kw) return deptTreeData.value;
+  return filterDeptNode(deptTreeData.value, kw);
+});
+const onDeptActive = (vals: Array<string | number>) => {
+  queryParams.deptId = vals?.[0];
+  queryParams.pageNum = 1;
+  getList();
 };
 
 const handleAdd = async () => {
@@ -284,6 +370,7 @@ const handleDelete = async (row?: PostVO) => {
   getList();
 };
 
+loadDeptOptions();
 getList();
 </script>
 
@@ -298,5 +385,24 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
+}
+.dept-card {
+  height: 100%;
+}
+.dept-search {
+  margin-bottom: 8px;
+}
+.dept-tree-toggle {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+.dept-tree-wrap {
+  max-height: 600px;
+  overflow: auto;
 }
 </style>

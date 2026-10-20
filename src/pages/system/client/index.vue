@@ -3,16 +3,12 @@
     <t-card :bordered="false">
       <template #title><div class="card-title">客户端管理</div></template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="客户端key" name="clientKey"
           ><t-input v-model="queryParams.clientKey" clearable placeholder="请输入客户端key"
         /></t-form-item>
-        <t-form-item label="设备类型" name="deviceType"
-          ><dict-select
-            v-model="queryParams.deviceType"
-            placeholder="设备类型"
-            style="width: 160px"
-            type="sys_device_type"
+        <t-form-item label="客户端秘钥" name="clientSecret"
+          ><t-input v-model="queryParams.clientSecret" clearable placeholder="请输入客户端秘钥"
         /></t-form-item>
         <t-form-item label="状态" name="status"
           ><dict-select v-model="queryParams.status" placeholder="状态" style="width: 140px" type="sys_normal_disable"
@@ -49,10 +45,17 @@
         <t-button v-hasPermi="['system:client:export']" theme="warning" variant="outline" @click="handleExport"
           ><template #icon><download-icon /></template>导出</t-button
         >
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_client_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="list"
         :loading="loading"
         :pagination="pagination"
@@ -172,11 +175,12 @@ const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<ClientVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+const showSearch = ref(true);
 
-const queryParams = reactive<ClientQuery>({ pageNum: 1, pageSize: 10, clientKey: '', deviceType: '', status: '' });
+const queryParams = reactive<ClientQuery>({ pageNum: 1, pageSize: 10, clientKey: '', clientSecret: '', status: '' });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'clientId', title: '客户端编号', width: 160 },
   { colKey: 'clientKey', title: '客户端key', width: 200 },
@@ -188,6 +192,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -217,7 +226,7 @@ const handleQuery = () => {
 };
 const resetQuery = () => {
   queryParams.clientKey = '';
-  queryParams.deviceType = '';
+  queryParams.clientSecret = '';
   queryParams.status = '';
   handleQuery();
 };
@@ -325,5 +334,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

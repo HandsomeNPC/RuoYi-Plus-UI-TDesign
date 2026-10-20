@@ -19,6 +19,8 @@ export interface OssQuery extends PageQuery {
   originalName?: string;
   fileSuffix?: string;
   service?: string;
+  orderByColumn?: string;
+  isAsc?: string;
 }
 
 export interface OssForm {

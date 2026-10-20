@@ -10,7 +10,7 @@
         </t-popconfirm>
       </template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="系统模块" name="title"
           ><t-input v-model="queryParams.title" clearable placeholder="请输入系统模块"
         /></t-form-item>
@@ -65,10 +65,17 @@
         <t-button v-hasPermi="['monitor:operlog:export']" theme="warning" variant="outline" @click="handleExport"
           ><template #icon><download-icon /></template>导出</t-button
         >
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="monitor_operlog_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="listData"
         :loading="loading"
         :pagination="pagination"
@@ -117,7 +124,7 @@
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { DeleteIcon, DownloadIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { OperLogQuery, OperLogVO } from '@/api/monitor/operlog/types';
 import { cleanOperlog, delOperlog, list } from '@/api/monitor/operlog';
@@ -139,6 +146,7 @@ const listData = ref<OperLogVO[]>([]);
 const loading = ref(false);
 const detailVisible = ref(false);
 const current = ref<OperLogVO | null>(null);
+const showSearch = ref(true);
 
 const queryParams = reactive<OperLogQuery>({
   pageNum: 1,
@@ -155,7 +163,7 @@ const queryParams = reactive<OperLogQuery>({
 });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'operId', title: '日志编号', width: 90, align: 'center' },
   { colKey: 'title', title: '系统模块', width: 160 },
   { colKey: 'businessType', title: '操作类型', width: 100, align: 'center' },
@@ -172,6 +180,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'costTime', title: '消耗(ms)', width: 100, align: 'center' },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -238,5 +251,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

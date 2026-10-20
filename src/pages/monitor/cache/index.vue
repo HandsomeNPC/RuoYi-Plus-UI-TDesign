@@ -20,15 +20,10 @@
       </t-col>
       <t-col :lg="8" :xs="12">
         <t-card :bordered="false" title="命令统计">
-          <t-table :columns="cmdColumns" :data="commandStats" :loading="loading" hover row-key="name" stripe>
-            <template #value="{ row }">
-              <div class="cmd-row">
-                <span class="cmd-name">{{ row.name }}</span>
-                <t-progress :label="false" :percentage="percent(row.value)" />
-                <span class="cmd-val">{{ row.value }}</span>
-              </div>
-            </template>
-          </t-table>
+          <div ref="commandstatsRef" class="chart-box"></div>
+        </t-card>
+        <t-card :bordered="false" style="margin-top: 12px" title="内存消耗">
+          <div ref="usedmemoryRef" class="chart-box"></div>
         </t-card>
       </t-col>
     </t-row>
@@ -36,8 +31,8 @@
 </template>
 
 <script lang="ts" setup>
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { computed, ref } from 'vue';
+import * as echarts from 'echarts';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import type { CacheVO } from '@/api/monitor/cache/types';
 import { getCache } from '@/api/monitor/cache';
@@ -49,15 +44,20 @@ const info = ref<CacheVO['info']>({});
 const dbSize = ref(0);
 const commandStats = ref<Array<{ name: string; value: string }>>([]);
 
-const cmdColumns: PrimaryTableCol[] = [{ colKey: 'value', title: '调用次数', minWidth: 320 }];
+const commandstatsRef = ref<HTMLElement | null>(null);
+const usedmemoryRef = ref<HTMLElement | null>(null);
+let commandstatsInstance: echarts.ECharts | undefined;
+let usedmemoryInstance: echarts.ECharts | undefined;
 
-const maxValue = computed(() => {
-  const nums = commandStats.value.map((c) => Number(c.value) || 0);
-  return nums.length ? Math.max(...nums) : 1;
-});
-const percent = (val: string) => {
-  const n = Number(val) || 0;
-  return maxValue.value ? Math.round((n / maxValue.value) * 100) : 0;
+const handleResize = () => {
+  commandstatsInstance?.resize();
+  usedmemoryInstance?.resize();
+};
+const disposeCharts = () => {
+  commandstatsInstance?.dispose();
+  usedmemoryInstance?.dispose();
+  commandstatsInstance = undefined;
+  usedmemoryInstance = undefined;
 };
 
 const load = async () => {
@@ -68,31 +68,62 @@ const load = async () => {
     info.value = data?.info ?? {};
     dbSize.value = data?.dbSize ?? 0;
     commandStats.value = data?.commandStats ?? [];
+    disposeCharts();
+    if (commandstatsRef.value) {
+      commandstatsInstance = echarts.init(commandstatsRef.value);
+      commandstatsInstance.setOption({
+        tooltip: { trigger: 'item', formatter: '{a} <br/>{b} : {c} ({d}%)' },
+        series: [
+          {
+            name: '命令',
+            type: 'pie',
+            roseType: 'radius',
+            radius: [15, 95],
+            center: ['50%', '50%'],
+            data: commandStats.value.map((c) => ({ name: c.name, value: Number(c.value) || 0 })),
+            animationEasing: 'cubicInOut',
+            animationDuration: 1000,
+          },
+        ],
+      });
+    }
+    if (usedmemoryRef.value) {
+      usedmemoryInstance = echarts.init(usedmemoryRef.value);
+      usedmemoryInstance.setOption({
+        tooltip: { formatter: '{b} <br/>{a} : ' + (info.value.used_memory_human || '') },
+        series: [
+          {
+            name: '峰值',
+            type: 'gauge',
+            min: 0,
+            max: 1000,
+            detail: { formatter: info.value.used_memory_human || '' },
+            data: [{ value: parseFloat(info.value.used_memory_human || '0'), name: '内存消耗' }],
+          },
+        ],
+      });
+    }
   } finally {
     loading.value = false;
   }
 };
 
-load();
+onMounted(() => {
+  window.addEventListener('resize', handleResize);
+  load();
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize);
+  disposeCharts();
+});
 </script>
 
 <style lang="less" scoped>
 .cache-page {
   padding: 16px;
 }
-.cmd-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.cmd-name {
-  width: 200px;
-  flex-shrink: 0;
-  font-family: monospace;
-}
-.cmd-val {
-  width: 80px;
-  flex-shrink: 0;
-  text-align: right;
+.chart-box {
+  width: 100%;
+  height: 320px;
 }
 </style>

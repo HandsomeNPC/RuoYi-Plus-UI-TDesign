@@ -3,7 +3,7 @@
     <t-card :bordered="false">
       <template #title><div class="card-title">对象存储配置</div></template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="配置key" name="configKey"
           ><t-input v-model="queryParams.configKey" clearable placeholder="配置key"
         /></t-form-item>
@@ -38,10 +38,17 @@
             ><template #icon><delete-icon /></template>删除</t-button
           >
         </t-popconfirm>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_oss_config_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="list"
         :loading="loading"
         :pagination="pagination"
@@ -154,7 +161,7 @@
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DeleteIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { OssConfigForm, OssConfigQuery, OssConfigVO } from '@/api/system/ossConfig/types';
 import {
@@ -174,10 +181,11 @@ const list = ref<OssConfigVO[]>([]);
 const loading = ref(false);
 const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<OssConfigVO[]>([]);
+const showSearch = ref(true);
 const queryParams = reactive<OssConfigQuery>({ pageNum: 1, pageSize: 10, configKey: '', bucketName: '', status: '' });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'configKey', title: '配置key', width: 180 },
   { colKey: 'bucketName', title: '桶名称', width: 160 },
@@ -189,6 +197,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'status', title: '状态', width: 90, align: 'center' },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -326,5 +339,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

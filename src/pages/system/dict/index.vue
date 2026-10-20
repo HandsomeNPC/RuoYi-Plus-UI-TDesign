@@ -16,7 +16,7 @@
       </template>
 
       <!-- 搜索区 -->
-      <t-form :data="typeQueryParams" layout="inline" @submit="handleTypeQuery">
+      <t-form v-show="showSearch" :data="typeQueryParams" layout="inline" @submit="handleTypeQuery">
         <t-form-item label="字典名称" name="dictName">
           <t-input v-model="typeQueryParams.dictName" clearable placeholder="请输入字典名称" />
         </t-form-item>
@@ -59,11 +59,18 @@
             删除
           </t-button>
         </t-popconfirm>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="typeColumns"
+          class="toolbar-right"
+          storage-key="sys_dict_column_visible"
+          @query-table="getTypeList"
+        />
       </div>
 
       <!-- 类型表格 -->
       <t-table
-        :columns="typeColumns"
+        :columns="realTypeColumns"
         :data="typeList"
         :loading="typeLoading"
         :pagination="typePagination"
@@ -187,10 +194,21 @@
         <t-form-item label="显示排序" name="dictSort">
           <t-input-number v-model="dataForm.dictSort" :min="0" />
         </t-form-item>
-        <t-form-item label="样式属性" name="listClass">
+        <t-form-item label="回显样式" name="listClass">
           <t-select v-model="dataForm.listClass" clearable placeholder="请选择">
-            <t-option v-for="o in tagOptions" :key="o.value" :label="o.label" :value="o.value" />
+            <t-option
+              v-for="o in tagOptions"
+              :key="o.value"
+              :label="`${o.label}(${o.value || 'default'})`"
+              :value="o.value"
+            />
           </t-select>
+          <div class="list-class-preview">
+            预览：
+            <t-tag :theme="tagTheme(dataForm.listClass)" variant="light-outline">{{
+              dataForm.dictLabel || '字典标签'
+            }}</t-tag>
+          </div>
         </t-form-item>
         <t-form-item label="CSS Class" name="cssClass">
           <t-input v-model="dataForm.cssClass" placeholder="请输入 CSS Class" />
@@ -240,8 +258,9 @@ const typePagination = reactive({
 
 const typeSingle = computed(() => typeSelectedRows.value.length !== 1);
 const typeMultiple = computed(() => typeSelectedRows.value.length === 0);
+const showSearch = ref(true);
 
-const typeColumns: PrimaryTableCol[] = [
+const typeColumnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'dictName', title: '字典名称', width: 160, ellipsis: true },
   { colKey: 'dictType', title: '字典类型', width: 200 },
@@ -249,6 +268,11 @@ const typeColumns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 200, fixed: 'right', align: 'center' },
 ];
+const typeColumns = ref<PrimaryTableCol[]>(typeColumnsData);
+const realTypeColumns = computed<PrimaryTableCol[]>(() => {
+  const all = typeColumns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getTypeList = async () => {
   typeLoading.value = true;
@@ -566,7 +590,18 @@ getTypeList();
   gap: 8px;
   margin: 12px 0;
 }
+.toolbar-right {
+  margin-left: auto;
+}
 .drawer-body {
   padding: 0 8px 16px;
+}
+.list-class-preview {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>

@@ -13,7 +13,7 @@
         <t-tab-panel label="自定义" value="custom" />
       </t-tabs>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="参数名称" name="configName"
           ><t-input v-model="queryParams.configName" clearable placeholder="请输入参数名称"
         /></t-form-item>
@@ -55,10 +55,17 @@
         <t-button v-hasPermi="['system:config:export']" theme="warning" variant="outline" @click="handleExport"
           ><template #icon><download-icon /></template>导出</t-button
         >
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_config_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="list"
         :loading="loading"
         :pagination="pagination"
@@ -144,6 +151,7 @@ const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<ConfigVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+const showSearch = ref(true);
 
 // 全部 / 自定义 配置 Tab：自定义仅显示非系统内置（configType='N'），可直接行内编辑
 const activeTab = ref('all');
@@ -155,7 +163,7 @@ const handleTabChange = (val: string | number) => {
 const queryParams = reactive<ConfigQuery>({ pageNum: 1, pageSize: 10, configName: '', configKey: '', configType: '' });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'configId', title: '参数主键', width: 100, align: 'center' },
   { colKey: 'configName', title: '参数名称', width: 180 },
@@ -166,6 +174,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 160, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -296,5 +309,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

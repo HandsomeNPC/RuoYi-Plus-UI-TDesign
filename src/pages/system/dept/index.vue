@@ -6,7 +6,7 @@
       </template>
 
       <!-- 搜索 -->
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="部门名称" name="deptName">
           <t-input v-model="queryParams.deptName" clearable placeholder="请输入部门名称" />
         </t-form-item>
@@ -42,12 +42,19 @@
           <template #icon><t-icon name="chevron-down" /></template>
           展开/折叠
         </t-button>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_dept_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <!-- 树表 -->
       <t-enhanced-table
         ref="tableRef"
-        :columns="columns"
+        :columns="realColumns"
         :data="deptList"
         :loading="loading"
         :tree="{ childrenKey: 'children', defaultExpandAll: true }"
@@ -166,6 +173,7 @@ const deptList = ref<DeptVO[]>([]);
 const loading = ref(false);
 const isExpandAll = ref(true);
 const tableRef = ref();
+const showSearch = ref(true);
 
 // 负责人下拉：来自所选上级部门下的用户列表（后端 SysDeptBo.leader 是 Long）
 const deptUserOptions = ref<{ label: string; value: string | number }[]>([]);
@@ -197,7 +205,7 @@ const queryParams = reactive<DeptQuery>({
   status: '',
 });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'deptName', title: '部门名称', width: 200 },
   { colKey: 'orderNum', title: '排序', width: 100, align: 'center' },
   { colKey: 'leader', title: '负责人', width: 120 },
@@ -207,6 +215,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 200, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -343,5 +356,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

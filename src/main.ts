@@ -9,6 +9,7 @@ import IconSelect from '@/components/IconSelect/index.vue';
 import ImageUpload from '@/components/ImageUpload/index.vue';
 import FileUpload from '@/components/FileUpload/index.vue';
 import Editor from '@/components/Editor/index.vue';
+import RightToolbar from '@/components/RightToolbar/index.vue';
 import App from './App.vue';
 import directive from './directive';
 import router from './router';
@@ -17,6 +18,7 @@ import i18n from './locales';
 
 import 'tdesign-vue-next/es/style/index.css';
 import '@/style/index.less';
+import '@/style/size.less';
 import 'virtual:svg-icons-register';
 import './permission';
 
@@ -50,6 +52,10 @@ app.component('file-upload', FileUpload);
 // 全局富文本编辑器
 app.component('Editor', Editor);
 app.component('editor', Editor);
+
+// 全局表格右侧工具栏（搜索切换 / 刷新 / 列显隐）
+app.component('RightToolbar', RightToolbar);
+app.component('right-toolbar', RightToolbar);
 
 // 全局自定义指令（v-hasPermi / v-hasRoles）
 directive(app);

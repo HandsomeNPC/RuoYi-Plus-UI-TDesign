@@ -34,6 +34,7 @@ export interface ClientForm extends BaseEntity {
 export interface ClientQuery extends PageQuery {
   clientId?: string | number;
   clientKey?: string;
+  clientSecret?: string;
   grantType?: string;
   deviceType?: string;
   status?: string;

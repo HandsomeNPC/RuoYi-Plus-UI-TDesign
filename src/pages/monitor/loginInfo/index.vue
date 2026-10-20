@@ -10,7 +10,7 @@
         </t-popconfirm>
       </template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="用户名称" name="userName"
           ><t-input v-model="queryParams.userName" clearable placeholder="请输入用户名称"
         /></t-form-item>
@@ -47,10 +47,17 @@
           @click="handleUnlock"
           ><template #icon><lock-off-icon /></template>解锁</t-button
         >
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="monitor_logininfo_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="listData"
         :loading="loading"
         :pagination="pagination"
@@ -79,7 +86,7 @@ import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { DeleteIcon, DownloadIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { LockOffIcon } from 'tdesign-icons-vue-next';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { LoginInfoQuery, LoginInfoVO } from '@/api/monitor/loginInfo/types';
 import { cleanLoginInfo, delLoginInfo, list, unlockLoginInfo } from '@/api/monitor/loginInfo';
@@ -97,11 +104,12 @@ const listData = ref<LoginInfoVO[]>([]);
 const loading = ref(false);
 const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<LoginInfoVO[]>([]);
+const showSearch = ref(true);
 
 const queryParams = reactive<LoginInfoQuery>({ pageNum: 1, pageSize: 10, userName: '', ipaddr: '', status: '' });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'infoId', title: '访问编号', width: 90, align: 'center' },
   { colKey: 'userName', title: '用户名称', width: 140 },
@@ -116,6 +124,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'loginTime', title: '登录时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 120, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -185,5 +198,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

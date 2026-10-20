@@ -9,13 +9,17 @@
             <t-input v-model="deptFilter" clearable placeholder="部门名称">
               <template #prefix-icon><t-icon name="search" /></template>
             </t-input>
+            <div class="dept-tree-toggle">
+              <t-button size="small" theme="primary" variant="text" @click="toggleDeptTree(true)">展开全部</t-button>
+              <t-button size="small" theme="primary" variant="text" @click="toggleDeptTree(false)">折叠全部</t-button>
+            </div>
           </div>
           <div class="dept-tree-wrap">
             <t-tree
+              ref="deptTreeRef"
               :data="filteredDeptTree"
               :keys="{ label: 'label', value: 'id', children: 'children' }"
               activable
-              expand-all
               hover
               @active-change="onDeptActive"
             />
@@ -28,7 +32,7 @@
         <t-card :bordered="false">
           <template #title><div class="card-title">用户管理</div></template>
 
-          <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+          <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
             <t-form-item label="用户名称" name="userName"
               ><t-input v-model="queryParams.userName" clearable placeholder="请输入用户名称"
             /></t-form-item>
@@ -82,13 +86,31 @@
                 ><template #icon><delete-icon /></template>删除</t-button
               >
             </t-popconfirm>
+            <t-button v-hasPermi="['system:user:import']" theme="primary" variant="outline" @click="handleImport"
+              ><template #icon><upload-icon /></template>导入</t-button
+            >
+            <t-button
+              v-hasPermi="['system:user:unlock']"
+              :disabled="single"
+              theme="default"
+              variant="outline"
+              @click="handleUnlock"
+              ><template #icon><lock-off-icon /></template>解锁</t-button
+            >
             <t-button v-hasPermi="['system:user:export']" theme="warning" variant="outline" @click="handleExport"
               ><template #icon><download-icon /></template>导出</t-button
             >
+            <right-toolbar
+              v-model:show-search="showSearch"
+              :columns="columns"
+              class="toolbar-right"
+              storage-key="sys_user_column_visible"
+              @query-table="getList"
+            />
           </div>
 
           <t-table
-            :columns="columns"
+            :columns="realColumns"
             :data="list"
             :loading="loading"
             :pagination="pagination"
@@ -107,6 +129,11 @@
               />
             </template>
             <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
+            <template #userName="{ row }">
+              <t-link v-hasPermi="['system:user:query']" hover="color" theme="primary" @click="handleView(row)">{{
+                row.userName
+              }}</t-link>
+            </template>
             <template #operation="{ row }">
               <t-space :breakLine="false" size="small">
                 <t-link v-hasPermi="['system:user:query']" hover="color" theme="primary" @click="handleView(row)"
@@ -151,7 +178,7 @@
     >
       <t-form ref="formRef" :data="form" :rules="rules" label-width="100px" @submit="onSubmit">
         <t-row>
-          <t-col :span="6">
+          <t-col v-if="!isSelf" :span="6">
             <t-form-item label="归属部门" name="deptId">
               <t-tree-select
                 v-model="form.deptId"
@@ -160,6 +187,7 @@
                 clearable
                 filterable
                 placeholder="请选择归属部门"
+                @change="onFormDeptChange"
               />
             </t-form-item>
           </t-col>
@@ -199,7 +227,7 @@
               ><dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" /></t-form-item
           ></t-col>
         </t-row>
-        <t-row>
+        <t-row v-if="!isSelf">
           <t-col :span="6"
             ><t-form-item label="岗位" name="postIds"
               ><t-select
@@ -243,6 +271,18 @@
       </t-form>
     </t-dialog>
 
+    <!-- 用户导入 弹窗 -->
+    <t-dialog v-model:visible="importVisible" :on-confirm="submitImport" header="用户导入" width="420px">
+      <input ref="importInput" accept=".xlsx,.xls" class="import-file-input" type="file" />
+      <div class="import-tip">
+        <div><t-checkbox v-model="importUpdateSupport" />是否更新已经存在的用户数据</div>
+        <div>
+          仅允许导入 xls、xlsx 格式文件。
+          <t-link hover="color" theme="primary" @click="importTemplate">下载模板</t-link>
+        </div>
+      </div>
+    </t-dialog>
+
     <!-- 用户详情 抽屉 -->
     <t-drawer v-model:visible="viewVisible" :footer="false" header="用户信息详情" size="480px">
       <t-descriptions v-if="viewData" :column="2" bordered>
@@ -272,9 +312,18 @@
 
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { computed, reactive, ref } from 'vue';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import {
+  AddIcon,
+  DeleteIcon,
+  DownloadIcon,
+  EditIcon,
+  LockOffIcon,
+  RefreshIcon,
+  SearchIcon,
+  UploadIcon,
+} from 'tdesign-icons-vue-next';
+import { computed, nextTick, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { UserForm, UserQuery, UserVO } from '@/api/system/user/types';
@@ -286,12 +335,15 @@ import {
   getUser,
   listUser,
   resetUserPwd,
+  unlockUser,
   updateUser,
 } from '@/api/system/user';
-import { optionSelect as roleOptionSelect } from '@/api/system/role';
+import { getConfigKey } from '@/api/system/config';
 import { optionselect as postOptionSelect } from '@/api/system/post';
 import { isSuperAdmin } from '@/constants';
-import { download } from '@/utils/request';
+import { getLanguage } from '@/lang';
+import { useUserStore } from '@/store';
+import { download, globalHeaders } from '@/utils/request';
 import { useDict } from '@/utils/dict';
 import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { parseTime } from '@/utils/ruoyi';
@@ -299,9 +351,21 @@ import { parseTime } from '@/utils/ruoyi';
 defineOptions({ name: 'SystemUser' });
 
 const router = useRouter();
+const userStore = useUserStore();
 
 const { sys_normal_disable, sys_user_gender } = useDict('sys_normal_disable', 'sys_user_gender');
 const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
+
+// 默认初始密码（参数 sys.user.initPassword），新增用户时填入密码框
+const initPassword = ref('');
+const loadInitPassword = async () => {
+  try {
+    const res = await getConfigKey('sys.user.initPassword');
+    initPassword.value = (res?.data as string) ?? '';
+  } catch {
+    initPassword.value = '';
+  }
+};
 
 const list = ref<UserVO[]>([]);
 const loading = ref(false);
@@ -309,6 +373,7 @@ const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<UserVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+const showSearch = ref(true);
 
 const queryParams = reactive<UserQuery>({
   pageNum: 1,
@@ -320,7 +385,7 @@ const queryParams = reactive<UserQuery>({
 });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'userId', title: '用户编号', width: 90, align: 'center' },
   { colKey: 'userName', title: '用户名称', width: 140 },
@@ -331,8 +396,19 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 260, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 // 左侧部门树
+const deptTreeRef = ref();
+const toggleDeptTree = (expand: boolean) => {
+  const inst = deptTreeRef.value;
+  if (expand) inst?.expandAll?.();
+  else inst?.foldAll?.();
+};
 const deptTreeData = ref<any[]>([]);
 const deptOptions = ref<any[]>([]);
 const deptFilter = ref('');
@@ -358,6 +434,9 @@ const loadDeptTree = async () => {
   const data = (res?.data ?? []) as any[];
   deptTreeData.value = data;
   deptOptions.value = data;
+  // 默认全部展开
+  await nextTick();
+  deptTreeRef.value?.expandAll?.();
 };
 
 const onDeptActive = (vals: Array<string | number>) => {
@@ -406,13 +485,29 @@ const handleExport = () => download('/system/user/export', { ...queryParams }, `
 
 const handleStatusChange = async (row: UserVO, v: any) => {
   const status = v ? '0' : '1';
-  try {
-    await changeUserStatus(row.userId, status);
-    row.status = status;
-    MessagePlugin.success('修改成功');
-  } catch {
-    /* ignore */
-  }
+  const text = status === '0' ? '启用' : '停用';
+  const confirm = DialogPlugin.confirm({
+    header: '提示',
+    body: `确认要"${text}""${row.userName}"用户吗?`,
+    confirmBtn: { content: '确定', theme: 'primary' },
+    onConfirm: async () => {
+      try {
+        await changeUserStatus(row.userId, status);
+        row.status = status;
+        MessagePlugin.success(text + '成功');
+      } catch {
+        // 失败回滚开关
+        row.status = status === '0' ? '1' : '0';
+      } finally {
+        confirm.destroy();
+      }
+    },
+    onClose: () => {
+      // 取消则回滚
+      row.status = status === '0' ? '1' : '0';
+      confirm.destroy();
+    },
+  });
 };
 
 // ---- 表单 ----
@@ -422,6 +517,9 @@ const dialogTitle = ref('');
 const submitting = ref(false);
 const roleOptions = ref<{ label: string; value: string | number }[]>([]);
 const postOptions = ref<{ label: string; value: string | number }[]>([]);
+
+// 编辑自己时不允许改部门/岗位/角色（与原项目一致）
+const isSelf = computed(() => !!form.userId && String(form.userId) === String(userStore.userId));
 
 const initForm = (): UserForm => ({
   userId: undefined,
@@ -440,21 +538,52 @@ const initForm = (): UserForm => ({
 
 const form = reactive<UserForm>(initForm());
 const rules: Record<string, FormRule[]> = {
-  userName: [{ required: true, message: '请输入用户名称', type: 'error' }],
+  userName: [
+    { required: true, message: '请输入用户名称', type: 'error' },
+    { len: 2, message: '用户名称长度必须介于 2 和 20 之间', type: 'error' },
+    {
+      validator: (val) => /^[A-Za-z0-9_一-龥]{2,20}$/.test(val),
+      message: '用户名称只能包含中文、字母、数字、下划线',
+      type: 'error',
+    },
+  ],
   nickName: [{ required: true, message: '请输入昵称', type: 'error' }],
-  password: [{ required: true, message: '请输入密码', type: 'error' }],
+  password: [
+    { required: true, message: '请输入密码', type: 'error' },
+    {
+      validator: (val) => /^[A-Za-z0-9@#$%^&*_+\-=!]{5,20}$/.test(val),
+      message: '密码长度 5-20 位且不含非法字符',
+      type: 'error',
+    },
+  ],
+  email: [{ pattern: /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/, message: '请输入正确的邮箱', type: 'warning' }],
+  phoneNumber: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', type: 'warning' }],
   deptId: [{ required: true, message: '请选择归属部门', type: 'error' }],
 };
 
-const loadRolePostOptions = async () => {
-  const [rr, pr] = await Promise.all([roleOptionSelect([]), postOptionSelect()]);
-  roleOptions.value = (rr?.data ?? []).map((r) => ({ label: r.roleName, value: r.roleId }));
-  postOptions.value = (pr?.data ?? []).map((p) => ({ label: p.postName, value: p.postId }));
+const toRoleOptions = (roles: any[]) => (roles ?? []).map((r) => ({ label: r.roleName, value: r.roleId }));
+const toPostOptions = (posts: any[]) => (posts ?? []).map((p) => ({ label: p.postName, value: p.postId }));
+
+// 切换归属部门时按部门重新加载岗位（原项目 optionselect(deptId)）
+const onFormDeptChange = async (val: any) => {
+  const deptId = val;
+  try {
+    const pr = await postOptionSelect(deptId);
+    postOptions.value = toPostOptions(pr?.data ?? []);
+  } catch {
+    /* ignore */
+  }
 };
 
 const handleAdd = async () => {
   Object.assign(form, initForm());
-  await Promise.all([loadDeptTree(), loadRolePostOptions()]);
+  await loadDeptTree();
+  // 走 getUser() 拿全部岗位与角色
+  const res = await getUser();
+  const info = res?.data;
+  postOptions.value = toPostOptions(info?.posts ?? []);
+  roleOptions.value = toRoleOptions(info?.roles ?? []);
+  form.password = initPassword.value ? String(initPassword.value) : '';
   dialogTitle.value = '新增用户';
   dialogVisible.value = true;
 };
@@ -462,7 +591,8 @@ const handleAdd = async () => {
 const handleUpdate = async (row?: UserVO) => {
   const t = row ?? selectedRows.value[0];
   if (!t) return;
-  await Promise.all([loadDeptTree(), loadRolePostOptions()]);
+  Object.assign(form, initForm());
+  await loadDeptTree();
   const res = await getUser(t.userId);
   const info = res?.data;
   const u = info?.user ?? t;
@@ -479,6 +609,12 @@ const handleUpdate = async (row?: UserVO) => {
     postIds: info?.postIds ?? [],
     roleIds: info?.roleIds ?? [],
   });
+  postOptions.value = toPostOptions(info?.posts ?? []);
+  // 角色合并：可选角色 + 用户已有角色（去重）
+  const merged = [...(info?.roles ?? []), ...(u.roles ?? [])];
+  const seen = new Map();
+  merged.forEach((r) => seen.set(String(r.roleId), r));
+  roleOptions.value = toRoleOptions([...seen.values()]);
   form.password = '';
   dialogTitle.value = '修改用户';
   dialogVisible.value = true;
@@ -490,6 +626,12 @@ const onSubmit = async () => {
   submitting.value = true;
   try {
     if (form.userId) {
+      // 编辑自己时置空部门/岗位/角色
+      if (isSelf.value) {
+        form.deptId = undefined;
+        form.postIds = [];
+        form.roleIds = [];
+      }
       await updateUser(form);
       MessagePlugin.success('修改成功');
     } else {
@@ -524,14 +666,14 @@ const handleResetPwd = (row: UserVO) => {
   pwdDialogVisible.value = true;
 };
 const onResetPwd = async () => {
-  if (!pwdForm.password) {
-    MessagePlugin.warning('请输入新密码');
+  if (!/^[A-Za-z0-9@#$%^&*_+\-=!]{5,20}$/.test(pwdForm.password)) {
+    MessagePlugin.warning('密码长度 5-20 位且不含非法字符');
     return;
   }
   resettingPwd.value = true;
   try {
     await resetUserPwd(pwdForm.userId, pwdForm.password);
-    MessagePlugin.success('修改成功');
+    MessagePlugin.success(`修改成功，新密码是：${pwdForm.password}`);
     pwdDialogVisible.value = false;
   } finally {
     resettingPwd.value = false;
@@ -554,7 +696,67 @@ const handleAuthRole = (row: UserVO) => {
   router.push(`/system/user-auth/role/${row.userId}`);
 };
 
+// ---- 解锁 ----
+const handleUnlock = async () => {
+  const row = selectedRows.value[0];
+  if (!row) return;
+  const confirm = DialogPlugin.confirm({
+    header: '提示',
+    body: `是否确认解锁用户编号为"${row.userId}"的数据项?`,
+    onConfirm: async () => {
+      try {
+        await unlockUser(row.userId);
+        MessagePlugin.success(`用户编号"${row.userId}"解锁成功`);
+      } finally {
+        confirm.destroy();
+      }
+    },
+    onClose: () => confirm.destroy(),
+  });
+};
+
+// ---- 导入 ----
+const importVisible = ref(false);
+const importUpdateSupport = ref(false);
+const importInput = ref<HTMLInputElement | null>(null);
+const handleImport = () => {
+  importUpdateSupport.value = false;
+  importVisible.value = true;
+};
+const importTemplate = () => download('/system/user/importTemplate', {}, `user_template_${Date.now()}.xlsx`);
+const submitImport = async () => {
+  const file = importInput.value?.files?.[0];
+  if (!file) {
+    MessagePlugin.warning('请选择文件');
+    return;
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const resp = await fetch(
+      `${import.meta.env.VITE_APP_BASE_API}/system/user/importData?updateSupport=${importUpdateSupport.value ? 1 : 0}`,
+      {
+        method: 'POST',
+        headers: { ...globalHeaders(), 'Content-Language': getLanguage() },
+        body: formData,
+      },
+    );
+    const result = await resp.json();
+    const msg = String(result?.msg ?? '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/<[^>]+>/g, '');
+    DialogPlugin.alert({ header: '导入结果', body: msg, confirmBtn: '确定' });
+    importVisible.value = false;
+    if (importInput.value) importInput.value.value = '';
+    getList();
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '导入失败');
+  }
+};
+
 loadDeptTree();
+loadInitPassword();
 getList();
 </script>
 
@@ -570,14 +772,33 @@ getList();
   gap: 8px;
   margin: 12px 0;
 }
+.toolbar-right {
+  margin-left: auto;
+}
 .dept-card {
   height: 100%;
 }
 .dept-search {
   margin-bottom: 8px;
 }
+.dept-tree-toggle {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
 .dept-tree-wrap {
   max-height: 600px;
   overflow: auto;
+}
+.import-file-input {
+  display: block;
+  margin-bottom: 8px;
+  width: 100%;
+}
+.import-tip {
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  line-height: 1.8;
 }
 </style>

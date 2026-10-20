@@ -31,6 +31,7 @@
             </t-button>
           </t-tooltip>
           <screenfull />
+          <size-select />
           <language-switcher />
           <t-dropdown :min-column-width="120" trigger="click">
             <template #dropdown>
@@ -78,6 +79,7 @@ import type { MenuRoute, ModeType } from '@/types/interface';
 import MenuContent from './MenuContent.vue';
 import Notice from './Notice.vue';
 import Search from './Search.vue';
+import SizeSelect from './SizeSelect.vue';
 
 const { theme, layout, showLogo, menu, isFixed, isCompact } = defineProps({
   theme: {

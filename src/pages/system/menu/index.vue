@@ -6,7 +6,7 @@
       </template>
 
       <!-- 搜索 -->
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="菜单名称" name="menuName">
           <t-input v-model="queryParams.menuName" clearable placeholder="请输入菜单名称" />
         </t-form-item>
@@ -41,11 +41,22 @@
           <template #icon><t-icon name="chevron-down" /></template>
           展开/折叠
         </t-button>
+        <t-button v-hasPermi="['system:menu:remove']" theme="danger" variant="outline" @click="handleCascadeDelete">
+          <template #icon><delete-icon /></template>
+          级联删除
+        </t-button>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_menu_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-enhanced-table
         ref="tableRef"
-        :columns="columns"
+        :columns="realColumns"
         :data="menuList"
         :loading="loading"
         :tree="{ childrenKey: 'children', defaultExpandAll: true }"
@@ -130,12 +141,22 @@
 
         <t-row v-if="form.menuType !== 'F'">
           <t-col :span="6">
-            <t-form-item label="路由地址" name="path">
+            <t-form-item name="path">
+              <template #label>
+                <t-tooltip content="访问的路由地址，如：user，外网地址需内链访问则以 http(s):// 开头">
+                  路由地址 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <t-input v-model="form.path" placeholder="请输入路由地址" />
             </t-form-item>
           </t-col>
           <t-col v-if="form.menuType === 'C'" :span="6">
-            <t-form-item label="组件路径" name="component">
+            <t-form-item name="component">
+              <template #label>
+                <t-tooltip content="访问的组件路径，如：system/user/index，默认在 views 目录下">
+                  组件路径 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <t-input v-model="form.component" placeholder="如 system/user/index" />
             </t-form-item>
           </t-col>
@@ -143,12 +164,22 @@
 
         <t-row v-if="form.menuType !== 'M'">
           <t-col :span="6">
-            <t-form-item label="权限标识" name="perms">
+            <t-form-item name="perms">
+              <template #label>
+                <t-tooltip content="控制器中定义的权限字符，如：@SaCheckPermission('system:user:list')">
+                  权限标识 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <t-input v-model="form.perms" placeholder="如 system:user:list" />
             </t-form-item>
           </t-col>
           <t-col v-if="form.menuType === 'C'" :span="6">
-            <t-form-item label="路由参数" name="queryParam">
+            <t-form-item name="queryParam">
+              <template #label>
+                <t-tooltip content='访问路由的默认传递参数，如：{"id": 1, "name": "ry"}'>
+                  路由参数 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <t-input v-model="form.queryParam" placeholder='如 {"id": 1}' />
             </t-form-item>
           </t-col>
@@ -156,12 +187,22 @@
 
         <t-row v-if="form.menuType !== 'F'">
           <t-col :span="6">
-            <t-form-item label="是否外链" name="isFrame">
+            <t-form-item name="isFrame">
+              <template #label>
+                <t-tooltip content="选择是外链则路由地址需要以 http(s):// 开头">
+                  是否外链 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <dict-select v-model="form.isFrame" placeholder="请选择" type="sys_yes_no" />
             </t-form-item>
           </t-col>
           <t-col v-if="form.menuType === 'C'" :span="6">
-            <t-form-item label="是否缓存" name="isCache">
+            <t-form-item name="isCache">
+              <template #label>
+                <t-tooltip content="选择是则会被 keep-alive 缓存，需要匹配组件 name 与路由地址保持一致">
+                  是否缓存 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <t-radio-group v-model="form.isCache">
                 <t-radio value="Y">缓存</t-radio>
                 <t-radio value="N">不缓存</t-radio>
@@ -172,7 +213,12 @@
 
         <t-row>
           <t-col :span="6">
-            <t-form-item label="显示状态" name="visible">
+            <t-form-item name="visible">
+              <template #label>
+                <t-tooltip content="隐藏后该菜单仍可路由，但不在侧边栏显示；隐藏菜单可填写激活路由以高亮父菜单">
+                  显示状态 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <dict-select v-model="form.visible" placeholder="请选择" type="sys_show_hide" />
             </t-form-item>
           </t-col>
@@ -185,7 +231,12 @@
 
         <t-row v-if="form.visible !== '0'">
           <t-col :span="6">
-            <t-form-item label="激活路由" name="activeMenu">
+            <t-form-item name="activeMenu">
+              <template #label>
+                <t-tooltip content="隐藏菜单填写默认激活路由，如 /system/user，使侧边栏高亮对应父菜单">
+                  激活路由 <help-circle-icon class="label-tip-icon" />
+                </t-tooltip>
+              </template>
               <t-input v-model="form.activeMenu" placeholder="如 /system/user" />
             </t-form-item>
           </t-col>
@@ -196,17 +247,37 @@
         </t-form-item>
       </t-form>
     </t-dialog>
+
+    <!-- 级联删除 弹窗 -->
+    <t-dialog
+      v-model:visible="cascadeVisible"
+      :confirm-btn="{ loading: cascadeSubmitting }"
+      :on-confirm="submitCascadeDelete"
+      header="级联删除菜单"
+      width="480px"
+    >
+      <t-tree
+        ref="cascadeTreeRef"
+        v-model="cascadeChecked"
+        :data="cascadeTreeData"
+        :keys="{ label: 'label', value: 'id', children: 'children' }"
+        checkable
+        expand-all
+        hover
+      />
+      <div class="cascade-tip">勾选要级联删除的菜单节点（含子节点），不可恢复。</div>
+    </t-dialog>
   </div>
 </template>
 
 <script lang="ts" setup>
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { reactive, ref } from 'vue';
+import { AddIcon, DeleteIcon, HelpCircleIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { computed, reactive, ref } from 'vue';
 
 import type { MenuForm, MenuQuery, MenuTreeOption, MenuVO } from '@/api/system/menu/types';
-import { addMenu, delMenu, listMenu, treeselect, updateMenu } from '@/api/system/menu';
+import { addMenu, cascadeDelMenu, delMenu, listMenu, treeselect, updateMenu } from '@/api/system/menu';
 import { useDict } from '@/utils/dict';
 import { handleTree, parseTime } from '@/utils/ruoyi';
 
@@ -218,13 +289,14 @@ const menuList = ref<MenuVO[]>([]);
 const loading = ref(false);
 const tableRef = ref();
 const isExpandAll = ref(true);
+const showSearch = ref(true);
 
 const queryParams = reactive<MenuQuery>({
   menuName: '',
   status: '',
 });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'menuName', title: '菜单名称', width: 240 },
   { colKey: 'menuType', title: '类型', width: 90, align: 'center' },
   { colKey: 'orderNum', title: '排序', width: 80, align: 'center' },
@@ -235,6 +307,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 200, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -378,12 +455,47 @@ const handleDelete = async (row: MenuVO) => {
   getList();
 };
 
+// ---- 级联删除 ----
+const cascadeVisible = ref(false);
+const cascadeSubmitting = ref(false);
+const cascadeTreeRef = ref();
+const cascadeChecked = ref<Array<string | number>>([]);
+const cascadeTreeData = ref<any[]>([]);
+const handleCascadeDelete = async () => {
+  cascadeChecked.value = [];
+  const res = await treeselect();
+  // treeselect 返回 {id,label,children} 树，直接用
+  cascadeTreeData.value = (res?.data ?? []) as any[];
+  cascadeVisible.value = true;
+};
+const submitCascadeDelete = async () => {
+  const ids = cascadeChecked.value;
+  if (!ids.length) {
+    MessagePlugin.warning('请选择要删除的菜单');
+    return;
+  }
+  cascadeSubmitting.value = true;
+  try {
+    await cascadeDelMenu(ids);
+    MessagePlugin.success('删除成功');
+    cascadeVisible.value = false;
+    getList();
+  } finally {
+    cascadeSubmitting.value = false;
+  }
+};
+
 getList();
 </script>
 
 <style lang="less" scoped>
 .menu-page {
   padding: 16px;
+}
+.label-tip-icon {
+  vertical-align: -2px;
+  color: var(--td-text-color-secondary);
+  margin-left: 2px;
 }
 .card-title {
   font-weight: 600;
@@ -392,6 +504,14 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
+}
+.cascade-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
 }
 .menu-name {
   display: inline-flex;

@@ -4,11 +4,7 @@
       <t-col :lg="3" :xs="12">
         <t-card :bordered="false">
           <div class="user-center">
-            <div class="avatar-wrap" @click="avatarInput?.click()">
-              <t-avatar :image="avatarUrl" size="80px" />
-              <div class="avatar-mask">修改头像</div>
-            </div>
-            <input ref="avatarInput" accept="image/*" style="display: none" type="file" @change="onAvatarChange" />
+            <user-avatar :img="avatarUrl" @uploaded="onAvatarUploaded" />
             <div class="user-name">{{ form.nickName || form.userName }}</div>
             <div class="user-role">{{ roleGroup || '—' }}</div>
           </div>
@@ -113,9 +109,10 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { reactive, ref } from 'vue';
 
 import type { UserProfileForm } from '@/api/system/user/types';
-import { getUserProfile, updateUserProfile, updateUserPwd, uploadAvatar } from '@/api/system/user';
+import { getUserProfile, updateUserProfile, updateUserPwd } from '@/api/system/user';
 import { useUserStore } from '@/store';
 import { useDict } from '@/utils/dict';
+import UserAvatar from './userAvatar.vue';
 
 defineOptions({ name: 'UserProfile' });
 
@@ -208,27 +205,10 @@ const handleClose = () => {
   window.history.length > 1 ? window.history.back() : null;
 };
 
-// ---- 头像上传 ----
-const avatarInput = ref<HTMLInputElement | null>(null);
-const onAvatarChange = async (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) return;
-  const formData = new FormData();
-  formData.append('avatarfile', file);
-  try {
-    const res = await uploadAvatar(formData);
-    const url = res?.data?.imgUrl;
-    if (url) {
-      avatarUrl.value = url;
-      userStore.avatar = url;
-      MessagePlugin.success('上传成功');
-    }
-  } catch {
-    MessagePlugin.error('上传失败');
-  } finally {
-    target.value = '';
-  }
+// ---- 头像上传（裁剪）----
+const onAvatarUploaded = (url: string) => {
+  avatarUrl.value = url;
+  userStore.avatar = url;
 };
 
 // ---- 在线设备 ----

@@ -3,7 +3,7 @@
     <t-card :bordered="false">
       <template #title><div class="card-title">对象存储</div></template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="文件名" name="fileName"
           ><t-input v-model="queryParams.fileName" clearable placeholder="请输入文件名"
         /></t-form-item>
@@ -34,6 +34,7 @@
       <div class="toolbar">
         <t-upload
           :accept="acceptTypes"
+          :multiple="true"
           :request-method="customUpload"
           :show-upload-progress="true"
           :trigger-props="{ theme: 'primary' }"
@@ -41,6 +42,18 @@
         >
           <t-button v-hasPermi="['system:oss:upload']" theme="primary"
             ><template #icon><upload-icon /></template>上传文件</t-button
+          >
+        </t-upload>
+        <t-upload
+          :accept="'image/*'"
+          :multiple="true"
+          :request-method="customUpload"
+          :show-upload-progress="true"
+          :trigger-props="{ theme: 'success', variant: 'outline' }"
+          @success="onUploadSuccess"
+        >
+          <t-button v-hasPermi="['system:oss:upload']" theme="success" variant="outline"
+            ><template #icon><image-icon /></template>上传图片</t-button
           >
         </t-upload>
         <t-popconfirm content="是否确认删除选中的文件?" @confirm="handleDelete()">
@@ -51,11 +64,27 @@
         <t-button v-hasPermi="['system:ossConfig:list']" theme="default" variant="outline" @click="handleOssConfig"
           ><template #icon><setting-icon /></template>配置管理</t-button
         >
+        <t-button
+          v-hasPermi="['system:ossConfig:edit']"
+          :loading="previewLoading"
+          theme="default"
+          variant="outline"
+          @click="togglePreview"
+          ><template #icon><browse-icon /></template>预览：{{ previewListResource ? '开' : '关' }}</t-button
+        >
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_oss_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="list"
+        :default-sort="[{ sortBy: 'createTime', descending: false }]"
         :loading="loading"
         :pagination="pagination"
         :selected-row-keys="selectedKeys"
@@ -64,17 +93,29 @@
         stripe
         @select-change="onSelectChange"
         @page-change="onPageChange"
+        @sort-change="onSortChange"
       >
         <template #fileSuffix="{ row }"
           ><t-tag variant="light-outline">{{ row.fileSuffix }}</t-tag></template
         >
+        <template #preview="{ row }">
+          <t-image
+            v-if="previewListResource && isImage(row.fileSuffix)"
+            :src="row.url"
+            fit="cover"
+            style="width: 60px; height: 60px; border-radius: 4px"
+          />
+          <span v-else :title="row.url" class="oss-url-cell">{{ row.url }}</span>
+        </template>
         <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
         <template #operation="{ row }">
           <t-space size="small">
             <t-link v-if="isImage(row.fileSuffix)" hover="color" theme="primary" @click="handlePreview(row)"
               >预览</t-link
             >
-            <t-link :href="row.url" hover="color" target="_blank" theme="primary">下载</t-link>
+            <t-link v-hasPermi="['system:oss:download']" :href="row.url" hover="color" target="_blank" theme="primary"
+              >下载</t-link
+            >
             <t-popconfirm content="是否确认删除?" @confirm="handleDelete(row)">
               <t-link v-hasPermi="['system:oss:remove']" hover="color" theme="danger">删除</t-link>
             </t-popconfirm>
@@ -92,12 +133,21 @@
 <script lang="ts" setup>
 import type { PageInfo, PrimaryTableCol, RequestMethodResponse, UploadFile } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { DeleteIcon, RefreshIcon, SearchIcon, SettingIcon, UploadIcon } from 'tdesign-icons-vue-next';
-import { reactive, ref } from 'vue';
+import {
+  BrowseIcon,
+  DeleteIcon,
+  ImageIcon,
+  RefreshIcon,
+  SearchIcon,
+  SettingIcon,
+  UploadIcon,
+} from 'tdesign-icons-vue-next';
+import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import type { OssQuery, OssVO } from '@/api/system/oss/types';
 import { delOss, listOss, uploadOss } from '@/api/system/oss';
+import { getConfigKey, updateConfigByKey } from '@/api/system/config';
 import { useDateRangeQuery } from '@/hooks/useDateRangeQuery';
 import { getToken } from '@/utils/auth';
 import { parseTime } from '@/utils/ruoyi';
@@ -108,10 +158,35 @@ const router = useRouter();
 
 const { dateRange, applyDateRange, resetDateRange } = useDateRangeQuery();
 
+// 预览开关：读写参数 sys.oss.previewListResource（true/false）
+const previewListResource = ref(false);
+const previewLoading = ref(false);
+const loadPreviewConfig = async () => {
+  try {
+    const res = await getConfigKey('sys.oss.previewListResource');
+    previewListResource.value = (res?.data as string) === 'true';
+  } catch {
+    previewListResource.value = false;
+  }
+};
+const togglePreview = async () => {
+  const next = !previewListResource.value;
+  previewLoading.value = true;
+  try {
+    await updateConfigByKey('sys.oss.previewListResource', String(next));
+    previewListResource.value = next;
+    MessagePlugin.success('修改成功');
+  } finally {
+    previewLoading.value = false;
+  }
+};
+loadPreviewConfig();
+
 const list = ref<OssVO[]>([]);
 const loading = ref(false);
 const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<OssVO[]>([]);
+const showSearch = ref(true);
 const queryParams = reactive<OssQuery>({
   pageNum: 1,
   pageSize: 10,
@@ -119,21 +194,29 @@ const queryParams = reactive<OssQuery>({
   originalName: '',
   fileSuffix: '',
   service: '',
+  orderByColumn: 'createTime',
+  isAsc: 'asc',
 });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 const acceptTypes = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt';
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'ossId', title: '编号', width: 90, align: 'center' },
   { colKey: 'fileName', title: '文件名', ellipsis: true, minWidth: 200 },
   { colKey: 'originalName', title: '原名', ellipsis: true, minWidth: 160 },
   { colKey: 'fileSuffix', title: '后缀', width: 90, align: 'center' },
-  { colKey: 'service', title: '服务商', width: 120 },
+  { colKey: 'preview', title: '文件展示', width: 120, align: 'center' },
+  { colKey: 'service', title: '服务商', width: 120, sorter: true },
   { colKey: 'createByName', title: '上传人', width: 120 },
-  { colKey: 'createTime', title: '上传时间', width: 180 },
+  { colKey: 'createTime', title: '上传时间', width: 180, sorter: true },
   { colKey: 'operation', title: '操作', width: 180, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const isImage = (suffix?: string) => {
   const img = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
@@ -161,6 +244,18 @@ const onPageChange = (p: PageInfo) => {
   queryParams.pageSize = p.pageSize;
   getList();
 };
+const onSortChange = (sort: any) => {
+  const s = Array.isArray(sort) ? sort[0] : sort;
+  if (s?.sortBy) {
+    queryParams.orderByColumn = s.sortBy;
+    queryParams.isAsc = s.descending ? 'desc' : 'asc';
+  } else {
+    queryParams.orderByColumn = undefined;
+    queryParams.isAsc = undefined;
+  }
+  queryParams.pageNum = 1;
+  getList();
+};
 const handleQuery = () => {
   queryParams.pageNum = 1;
   getList();
@@ -170,6 +265,8 @@ const resetQuery = () => {
   queryParams.originalName = '';
   queryParams.fileSuffix = '';
   queryParams.service = '';
+  queryParams.orderByColumn = 'createTime';
+  queryParams.isAsc = 'asc';
   resetDateRange();
   handleQuery();
 };
@@ -234,7 +331,18 @@ getList();
   gap: 8px;
   margin: 12px 0;
 }
+.toolbar-right {
+  margin-left: auto;
+}
 .preview-img {
   width: 100%;
+}
+.oss-url-cell {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--td-text-color-secondary);
 }
 </style>

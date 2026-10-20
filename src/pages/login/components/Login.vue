@@ -67,6 +67,34 @@
     <t-form-item class="btn-container">
       <t-button :loading="loading" block size="large" type="submit">登录</t-button>
     </t-form-item>
+
+    <!-- 第三方登录 -->
+    <div class="social-panel">
+      <span class="social-label">第三方登录</span>
+      <div class="social-actions">
+        <t-button shape="circle" theme="default" title="微信" variant="outline" @click="doSocialLogin('wechat')">
+          <template #icon><t-icon name="logo-wechat" /></template>
+        </t-button>
+        <t-button shape="circle" theme="default" title="MaxKey" variant="outline" @click="doSocialLogin('maxkey')">
+          <template #icon><t-icon name="user" /></template>
+        </t-button>
+        <t-button shape="circle" theme="default" title="TopIAM" variant="outline" @click="doSocialLogin('topiam')">
+          <template #icon><t-icon name="user" /></template>
+        </t-button>
+        <t-button shape="circle" theme="default" title="Gitee" variant="outline" @click="doSocialLogin('gitee')">
+          <template #icon><t-icon name="logo-gitee" /></template>
+        </t-button>
+        <t-button shape="circle" theme="default" title="GitHub" variant="outline" @click="doSocialLogin('github')">
+          <template #icon><t-icon name="logo-github" /></template>
+        </t-button>
+      </div>
+    </div>
+
+    <!-- 立即注册 -->
+    <div class="register-link">
+      还没有账号？
+      <t-link hover="color" theme="primary" @click="goRegister">立即注册</t-link>
+    </div>
   </t-form>
 </template>
 <script setup lang="ts">
@@ -76,6 +104,7 @@ import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { getCodeImg } from '@/api/login';
+import { authRouterUrl } from '@/api/system/social/auth';
 import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
@@ -129,6 +158,20 @@ const handleEnter = () => {
   form.value?.submit();
 };
 
+/** 第三方登录：拿授权跳转 URL 后整页跳转，回调到 /social-callback */
+const doSocialLogin = (source: string) => {
+  authRouterUrl(source).then((res: any) => {
+    if (res?.data) {
+      window.location.href = res.data;
+    }
+  });
+};
+
+/** 跳转注册页 */
+const goRegister = () => {
+  router.push('/register');
+};
+
 const onSubmit = async (ctx: SubmitContext) => {
   if (ctx.validateResult !== true) return;
   loading.value = true;
@@ -170,5 +213,26 @@ const onSubmit = async (ctx: SubmitContext) => {
     border-radius: var(--td-radius-medium);
     object-fit: cover;
   }
+}
+.social-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.social-label {
+  font-size: 13px;
+  color: var(--td-text-color-secondary);
+  white-space: nowrap;
+}
+.social-actions {
+  display: flex;
+  gap: 8px;
+}
+.register-link {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--td-text-color-secondary);
 }
 </style>

@@ -3,7 +3,7 @@
     <t-card :bordered="false">
       <template #title><div class="card-title">通知公告</div></template>
 
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="公告标题" name="noticeTitle"
           ><t-input v-model="queryParams.noticeTitle" clearable placeholder="请输入公告标题"
         /></t-form-item>
@@ -46,10 +46,17 @@
             ><template #icon><delete-icon /></template>删除</t-button
           >
         </t-popconfirm>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_notice_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="list"
         :loading="loading"
         :pagination="pagination"
@@ -149,6 +156,7 @@ const selectedKeys = ref<(string | number)[]>([]);
 const selectedRows = ref<NoticeVO[]>([]);
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+const showSearch = ref(true);
 
 const queryParams = reactive<NoticeQuery>({
   pageNum: 1,
@@ -160,7 +168,7 @@ const queryParams = reactive<NoticeQuery>({
 });
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showJumper: true });
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'noticeId', title: '公告编号', width: 100, align: 'center' },
   { colKey: 'noticeTitle', title: '公告标题', width: 220, ellipsis: true },
@@ -170,6 +178,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 220, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -305,5 +318,8 @@ getList();
   display: flex;
   gap: 8px;
   margin: 12px 0;
+}
+.toolbar-right {
+  margin-left: auto;
 }
 </style>

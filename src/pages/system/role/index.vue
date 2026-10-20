@@ -6,7 +6,7 @@
       </template>
 
       <!-- 搜索 -->
-      <t-form :data="queryParams" layout="inline" @submit="handleQuery">
+      <t-form v-show="showSearch" :data="queryParams" layout="inline" @submit="handleQuery">
         <t-form-item label="角色名称" name="roleName">
           <t-input v-model="queryParams.roleName" clearable placeholder="请输入角色名称" />
         </t-form-item>
@@ -63,10 +63,17 @@
           <template #icon><download-icon /></template>
           导出
         </t-button>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          :columns="columns"
+          class="toolbar-right"
+          storage-key="sys_role_column_visible"
+          @query-table="getList"
+        />
       </div>
 
       <t-table
-        :columns="columns"
+        :columns="realColumns"
         :data="roleList"
         :loading="loading"
         :pagination="pagination"
@@ -157,17 +164,32 @@
               <t-button size="small" theme="primary" variant="text" @click="checkMenuAll(false)">全不选</t-button>
             </t-space>
           </div>
-          <div class="tree-wrap">
+          <div class="tree-wrap menu-perm-tree">
             <t-tree
               ref="menuTreeRef"
               v-model="menuChecked"
-              :check-strictly="form.menuCheckStrictly"
-              :data="menuTree"
+              :check-strictly="!form.menuCheckStrictly"
+              :data="menuTreeDisplay"
               :keys="{ label: 'label', value: 'id', children: 'children' }"
               checkable
               expand-all
               hover
-            />
+              value-mode="all"
+            >
+              <template #operations="{ data }">
+                <div v-if="data.buttonPermissions?.length" class="node-buttons" @click.stop>
+                  <t-checkbox
+                    v-for="b in data.buttonPermissions"
+                    :key="b.id"
+                    :checked="buttonChecked.has(b.id)"
+                    :disabled="b.disabled"
+                    @change="(v: any) => onButtonToggle(b.id, v)"
+                    @click.stop
+                    >{{ b.label }}</t-checkbox
+                  >
+                </div>
+              </template>
+            </t-tree>
           </div>
         </t-tab-panel>
 
@@ -227,6 +249,7 @@ import type { MenuTreeOption } from '@/api/system/menu/types';
 import { roleMenuTreeselect, treeselect as menuTreeselect } from '@/api/system/menu';
 import type { DeptVO } from '@/api/system/dept/types';
 import { listDept } from '@/api/system/dept';
+import { MenuTypeEnum } from '@/enums';
 import { isSuperAdminRole } from '@/constants';
 import { download } from '@/utils/request';
 import { useDict } from '@/utils/dict';
@@ -262,8 +285,9 @@ const pagination = reactive({
 
 const single = computed(() => selectedRows.value.length !== 1);
 const multiple = computed(() => selectedRows.value.length === 0);
+const showSearch = ref(true);
 
-const columns: PrimaryTableCol[] = [
+const columnsData: PrimaryTableCol[] = [
   { colKey: 'row-select', type: 'multiple', width: 46, align: 'center' },
   { colKey: 'roleId', title: '角色编号', width: 100, align: 'center' },
   { colKey: 'roleName', title: '角色名称', width: 160 },
@@ -273,6 +297,11 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'createTime', title: '创建时间', width: 180 },
   { colKey: 'operation', title: '操作', width: 240, fixed: 'right', align: 'center' },
 ];
+const columns = ref<PrimaryTableCol[]>(columnsData);
+const realColumns = computed<PrimaryTableCol[]>(() => {
+  const all = columns.value as any[];
+  return all.filter((c: any) => c.visible !== false) as unknown as PrimaryTableCol[];
+});
 
 const getList = async () => {
   loading.value = true;
@@ -333,10 +362,80 @@ const activeTab = ref('base');
 const menuTreeRef = ref();
 const deptTreeRef = ref();
 
-const menuTree = ref<MenuTreeOption[]>([]);
+const menuTreeDisplay = ref<DisplayMenuNode[]>([]);
 const menuChecked = ref<Array<string | number>>([]);
+// 按钮权限（F 型菜单）：独立勾选，不进 t-tree
+const buttonChecked = reactive(new Set<string | number>());
+const buttonPermIds = ref<Set<string | number>>(new Set());
+const parentMap = ref<Map<string | number, string | number>>(new Map());
+const buttonOwner = ref<Map<string | number, string | number>>(new Map());
 const deptTree = ref<any[]>([]);
 const deptChecked = ref<Array<string | number>>([]);
+
+interface ButtonPerm {
+  id: string | number;
+  label: string;
+  disabled?: boolean;
+}
+interface DisplayMenuNode {
+  id: string | number;
+  label: string;
+  disabled?: boolean;
+  children?: DisplayMenuNode[];
+  buttonPermissions?: ButtonPerm[];
+}
+
+// 将后端菜单树（含 F 型按钮节点）重排：F 型剥离为父节点的 buttonPermissions
+const buildDisplay = (raw: MenuTreeOption[]): { tree: DisplayMenuNode[]; buttonIds: Set<string | number> } => {
+  const buttonIds = new Set<string | number>();
+  const pMap = new Map<string | number, string | number>();
+  const bOwner = new Map<string | number, string | number>();
+  const walk = (nodes: MenuTreeOption[], parentId?: string | number): DisplayMenuNode[] =>
+    nodes
+      .filter((n) => n.menuType !== MenuTypeEnum.F)
+      .map((n) => {
+        const buttons: ButtonPerm[] = [];
+        const menuChildren: MenuTreeOption[] = [];
+        (n.children ?? []).forEach((c) => {
+          if (c.menuType === MenuTypeEnum.F) {
+            buttonIds.add(c.id);
+            bOwner.set(c.id, n.id);
+            buttons.push({ id: c.id, label: c.label, disabled: c.disabled });
+          } else {
+            menuChildren.push(c);
+          }
+        });
+        if (parentId !== undefined) pMap.set(n.id, parentId);
+        return {
+          id: n.id,
+          label: n.label,
+          disabled: n.disabled,
+          children: menuChildren.length ? walk(menuChildren, n.id) : undefined,
+          buttonPermissions: buttons.length ? buttons : undefined,
+        };
+      });
+  const tree = walk(raw);
+  parentMap.value = pMap;
+  buttonOwner.value = bOwner;
+  return { tree, buttonIds };
+};
+
+// 按钮勾选时，父子联动开启则一并把所属菜单及其祖先链纳入提交集合（仅数据层，不动树 UI）
+const onButtonToggle = (id: string | number, checked: any) => {
+  if (checked) buttonChecked.add(id);
+  else buttonChecked.delete(id);
+};
+
+// 收集某按钮所属菜单向上的整条菜单链 id
+const collectOwnerChain = (buttonId: string | number): Array<string | number> => {
+  const res: Array<string | number> = [];
+  let cur = buttonOwner.value.get(buttonId);
+  while (cur !== undefined) {
+    res.push(cur);
+    cur = parentMap.value.get(cur);
+  }
+  return res;
+};
 
 const initForm = (): RoleForm => ({
   roleId: undefined,
@@ -379,11 +478,13 @@ const toDeptTreeSelect = (list: DeptVO[]): any[] => {
 const handleAdd = async () => {
   Object.assign(form, initForm());
   menuChecked.value = [];
-  deptChecked.value = [];
+  buttonChecked.clear();
   activeTab.value = 'base';
   // 菜单树
   const mres = await menuTreeselect();
-  menuTree.value = (mres?.data ?? []) as MenuTreeOption[];
+  const built = buildDisplay((mres?.data ?? []) as MenuTreeOption[]);
+  menuTreeDisplay.value = built.tree;
+  buttonPermIds.value = built.buttonIds;
   // 部门树
   const dres = await listDept();
   deptTree.value = toDeptTreeSelect(handleTree<DeptVO>((dres?.data ?? []) as DeptVO[], 'deptId'));
@@ -408,11 +509,20 @@ const handleUpdate = async (row?: RoleVO) => {
     menuCheckStrictly: target.menuCheckStrictly,
     deptCheckStrictly: target.deptCheckStrictly,
   });
-  // 菜单树 + 已选
+  // 菜单树 + 已选（拆分 M/C 与 F 按钮权限）
   const mres = await roleMenuTreeselect(target.roleId);
-  menuTree.value = (mres?.data?.menus ?? []) as MenuTreeOption[];
+  const built = buildDisplay((mres?.data?.menus ?? []) as MenuTreeOption[]);
+  menuTreeDisplay.value = built.tree;
+  buttonPermIds.value = built.buttonIds;
+  const checkedKeys = (mres?.data?.checkedKeys ?? []) as Array<string | number>;
+  const menuSel: Array<string | number> = [];
+  buttonChecked.clear();
+  checkedKeys.forEach((id) => {
+    if (built.buttonIds.has(id)) buttonChecked.add(id);
+    else menuSel.push(id);
+  });
   // 严格模式下展示已选，避免父级联动勾选全部子级
-  menuChecked.value = (mres?.data?.checkedKeys ?? []) as Array<string | number>;
+  menuChecked.value = menuSel;
   // 部门树 + 已选
   const dres = await deptTreeSelect(target.roleId);
   deptTree.value = (dres?.data?.depts ?? []) as any[];
@@ -427,7 +537,12 @@ const expandMenuAll = (expand: boolean) => {
   else inst?.foldAll?.();
 };
 const checkMenuAll = (check: boolean) => {
-  menuChecked.value = check ? collectKeys(menuTree.value, 'id') : [];
+  menuChecked.value = check ? collectKeys(menuTreeDisplay.value, 'id') : [];
+  if (check) {
+    buttonPermIds.value.forEach((id) => buttonChecked.add(id));
+  } else {
+    buttonChecked.clear();
+  }
 };
 const expandDeptAll = (expand: boolean) => {
   const inst = deptTreeRef.value;
@@ -456,7 +571,19 @@ const onSubmit = async () => {
   if (valid !== true) return;
   submitting.value = true;
   try {
-    form.menuIds = [...menuChecked.value];
+    // 菜单 ids = 树中 checked/半选 M/C 节点 + 按钮权限 + 按钮所属菜单链
+    const items = (menuTreeRef.value?.getItems?.() ?? []) as Array<{
+      value: string | number;
+      checked: boolean;
+      indeterminate: boolean;
+    }>;
+    const treeMenuIds = items.filter((n) => n.checked || n.indeterminate).map((n) => n.value);
+    const buttonChainIds: Array<string | number> = [];
+    buttonChecked.forEach((id) => {
+      buttonChainIds.push(...collectOwnerChain(id));
+    });
+    const menuIdSet = new Set<string | number>([...treeMenuIds, ...buttonChainIds, ...buttonChecked]);
+    form.menuIds = Array.from(menuIdSet);
     form.deptIds = form.dataScope === '2' ? [...deptChecked.value] : [];
     if (form.roleId) {
       await updateRole(form);
@@ -513,6 +640,9 @@ getList();
   gap: 8px;
   margin: 12px 0;
 }
+.toolbar-right {
+  margin-left: auto;
+}
 .tree-toolbar {
   display: flex;
   align-items: center;
@@ -525,5 +655,14 @@ getList();
   border: 1px solid var(--td-component-stroke);
   border-radius: var(--td-radius-default);
   padding: 8px;
+}
+.menu-perm-tree :deep(.node-buttons) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-left: 12px;
+}
+.menu-perm-tree :deep(.t-tree__operations) {
+  margin-left: 0;
 }
 </style>
