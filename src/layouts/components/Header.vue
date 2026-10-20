@@ -2,7 +2,7 @@
   <div :class="layoutCls">
     <t-head-menu :class="menuCls" :theme="menuTheme" expand-type="popup" :value="active">
       <template #logo>
-        <span v-if="showLogo" class="header-logo-container" @click="handleNav('/dashboard/base')">
+        <span v-if="showLogo" class="header-logo-container" @click="handleNav('/index')">
           <logo-full class="t-logo" />
         </span>
         <div v-else class="header-operate-left">
@@ -33,7 +33,7 @@
           <language-switcher />
           <t-dropdown :min-column-width="120" trigger="click">
             <template #dropdown>
-              <t-dropdown-item class="operations-dropdown-container-item" @click="handleNav('/user/index')">
+              <t-dropdown-item class="operations-dropdown-container-item" @click="handleNav('/user/profile')">
                 <user-circle-icon />{{ t('layout.header.user') }}
               </t-dropdown-item>
               <t-dropdown-item class="operations-dropdown-container-item" @click="handleLogout">
@@ -137,7 +137,8 @@ const handleNav = (url: string) => {
   router.push(url);
 };
 
-const handleLogout = () => {
+const handleLogout = async () => {
+  await user.logout();
   router.push({
     path: '/login',
     query: { redirect: router.currentRoute.value.fullPath },

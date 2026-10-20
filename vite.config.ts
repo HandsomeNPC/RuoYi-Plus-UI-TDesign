@@ -5,6 +5,7 @@ import vueJsx from '@vitejs/plugin-vue-jsx';
 import type { ConfigEnv, UserConfig } from 'vite';
 import { loadEnv } from 'vite';
 import { viteMockServe } from 'vite-plugin-mock';
+import { createSvgIconsPlugin } from 'vite-plugin-svg-icons-ng';
 import svgLoader from 'vite-svg-loader';
 
 const CWD = process.cwd();
@@ -41,6 +42,11 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         enable: mode === 'mock',
       }),
       svgLoader(),
+      // RuoYi SVG 菜单/按钮图标（sprite，<svg-icon name="...">）
+      createSvgIconsPlugin({
+        iconDirs: [path.resolve(__dirname, 'src/assets/icons/svg')],
+        symbolId: 'icon-[name]',
+      }),
     ],
 
     server: {

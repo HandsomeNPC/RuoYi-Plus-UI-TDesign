@@ -9,8 +9,14 @@
     @submit="onSubmit"
   >
     <template v-if="type === 'password'">
-      <t-form-item name="account">
-        <t-input v-model="formData.account" size="large" :placeholder="`${t('pages.login.input.account')}：admin`">
+      <t-form-item name="username">
+        <t-input
+          v-model="formData.username"
+          clearable
+          placeholder="请输入用户名"
+          size="large"
+          @keyup.enter="handleEnter"
+        >
           <template #prefix-icon>
             <t-icon name="user" />
           </template>
@@ -23,7 +29,8 @@
           size="large"
           :type="showPsw ? 'text' : 'password'"
           clearable
-          :placeholder="`${t('pages.login.input.password')}：admin`"
+          placeholder="请输入密码"
+          @keyup.enter="handleEnter"
         >
           <template #prefix-icon>
             <t-icon name="lock-on" />
@@ -34,121 +41,134 @@
         </t-input>
       </t-form-item>
 
+      <t-form-item v-if="captchaEnabled" name="code">
+        <div class="code-container">
+          <t-input
+            v-model="formData.code"
+            autocomplete="off"
+            clearable
+            placeholder="请输入验证码"
+            size="large"
+            @keyup.enter="handleEnter"
+          >
+            <template #prefix-icon>
+              <t-icon name="safe" />
+            </template>
+          </t-input>
+          <img v-if="codeImg" :src="codeImg" alt="验证码" class="code-img" title="点击刷新" @click="getCode" />
+        </div>
+      </t-form-item>
+
       <div class="check-container remember-pwd">
-        <t-checkbox>{{ t('pages.login.remember') }}</t-checkbox>
-        <span class="tip">{{ t('pages.login.forget') }}</span>
+        <t-checkbox v-model="formData.rememberMe">记住密码</t-checkbox>
       </div>
     </template>
 
-    <!-- 扫码登录 -->
-    <template v-else-if="type === 'qrcode'">
-      <div class="tip-container">
-        <span class="tip">{{ t('pages.login.wechatLogin') }}</span>
-        <span class="refresh">{{ t('pages.login.refresh') }} <t-icon name="refresh" /> </span>
-      </div>
-      <t-qrcode value="tdesign" :size="160" level="H" />
-    </template>
-
-    <!-- 手机号登录 -->
-    <template v-else>
-      <t-form-item name="phone">
-        <t-input v-model="formData.phone" size="large" :placeholder="t('pages.login.input.phone')">
-          <template #prefix-icon>
-            <t-icon name="mobile" />
-          </template>
-        </t-input>
-      </t-form-item>
-
-      <t-form-item class="verification-code" name="verifyCode">
-        <t-input v-model="formData.verifyCode" size="large" :placeholder="t('pages.login.input.verification')" />
-        <t-button size="large" variant="outline" :disabled="countDown > 0" @click="sendCode">
-          {{ countDown === 0 ? t('pages.login.sendVerification') : t('pages.login.countdown', { count: countDown }) }}
-        </t-button>
-      </t-form-item>
-    </template>
-
-    <t-form-item v-if="type !== 'qrcode'" class="btn-container">
-      <t-button block size="large" type="submit"> {{ t('pages.login.signIn') }} </t-button>
+    <t-form-item class="btn-container">
+      <t-button :loading="loading" block size="large" type="submit">登录</t-button>
     </t-form-item>
-
-    <div class="switch-container">
-      <span v-if="type !== 'password'" class="tip" @click="switchType('password')">{{
-        t('pages.login.accountLogin')
-      }}</span>
-      <span v-if="type !== 'qrcode'" class="tip" @click="switchType('qrcode')">{{ t('pages.login.wechatLogin') }}</span>
-      <span v-if="type !== 'phone'" class="tip" @click="switchType('phone')">{{ t('pages.login.phoneLogin') }}</span>
-    </div>
   </t-form>
 </template>
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormRule, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { useCounter } from '@/hooks';
-import { t } from '@/locales';
+import { getCodeImg } from '@/api/login';
 import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
 
 const INITIAL_DATA = {
-  phone: '',
-  account: 'admin',
-  password: 'admin',
-  verifyCode: '',
-  checked: false,
+  username: 'admin',
+  password: 'admin123',
+  code: '',
+  uuid: '',
+  rememberMe: false,
 };
 
-const FORM_RULES = computed<Record<string, FormRule[]>>(() => ({
-  phone: [{ required: true, message: t('pages.login.required.phone'), type: 'error' }],
-  account: [{ required: true, message: t('pages.login.required.account'), type: 'error' }],
-  password: [{ required: true, message: t('pages.login.required.password'), type: 'error' }],
-  verifyCode: [{ required: true, message: t('pages.login.required.verification'), type: 'error' }],
-}));
+const FORM_RULES: Record<string, FormRule[]> = {
+  username: [{ required: true, message: '请输入用户名', type: 'error' }],
+  password: [{ required: true, message: '请输入密码', type: 'error' }],
+  code: [{ required: true, message: '请输入验证码', type: 'error' }],
+};
 
 const type = ref('password');
 
 const form = ref<FormInstanceFunctions>();
 const formData = ref({ ...INITIAL_DATA });
 const showPsw = ref(false);
+const loading = ref(false);
 
-const [countDown, handleCounter] = useCounter();
-
-const switchType = (val: string) => {
-  type.value = val;
-};
+const captchaEnabled = ref(false);
+const codeImg = ref('');
 
 const router = useRouter();
 const route = useRoute();
 
-/**
- * 发送验证码
- */
-const sendCode = () => {
-  form.value!.validate({ fields: ['phone'] }).then((e) => {
-    if (e === true) {
-      handleCounter();
+/** 获取验证码 */
+const getCode = async () => {
+  try {
+    const res = await getCodeImg();
+    const data = res?.data;
+    captchaEnabled.value = !!data?.captchaEnabled;
+    if (captchaEnabled.value) {
+      codeImg.value = data!.img ? `data:image/gif;base64,${data!.img}` : '';
+      formData.value.uuid = data!.uuid ?? '';
     }
-  });
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+getCode();
+
+/** 回车提交 */
+const handleEnter = () => {
+  form.value?.submit();
 };
 
 const onSubmit = async (ctx: SubmitContext) => {
-  if (ctx.validateResult === true) {
-    try {
-      await userStore.login(formData.value);
-
-      MessagePlugin.success(t('pages.login.loginSuccess'));
-      const redirect = route.query.redirect as string;
-      const redirectUrl = redirect || '/dashboard';
-      router.push(redirectUrl);
-    } catch (e: unknown) {
-      console.log(e);
-      MessagePlugin.error((e as Error).message);
-    }
+  if (ctx.validateResult !== true) return;
+  loading.value = true;
+  try {
+    await userStore.login({
+      ...formData.value,
+      clientId: import.meta.env.VITE_APP_CLIENT_ID,
+      grantType: 'password',
+    });
+    MessagePlugin.success('登录成功');
+    const redirect = route.query.redirect as string;
+    router.push(redirect || '/');
+  } catch (e: unknown) {
+    // 失败后刷新验证码
+    getCode();
+    MessagePlugin.error(e instanceof Error ? e.message : '登录失败');
+  } finally {
+    loading.value = false;
   }
 };
 </script>
 <style lang="less" scoped>
 @import '../index.less';
+
+.code-container {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  align-items: center;
+
+  :deep(.t-input) {
+    flex: 1;
+  }
+
+  .code-img {
+    height: 40px;
+    width: 120px;
+    cursor: pointer;
+    border-radius: var(--td-radius-medium);
+    object-fit: cover;
+  }
+}
 </style>

@@ -1,84 +1,67 @@
-import 'nprogress/nprogress.css'; // progress bar style
+import 'nprogress/nprogress.css';
 
-import NProgress from 'nprogress'; // progress bar
+import NProgress from 'nprogress';
 import { MessagePlugin } from 'tdesign-vue-next';
-import type { RouteRecordRaw } from 'vue-router';
 
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
-import { PAGE_NOT_FOUND_ROUTE } from '@/utils/route/constant';
+import { getToken } from '@/utils/auth';
+import { isHandledRequestError } from '@/utils/request';
 
 NProgress.configure({ showSpinner: false });
 
-router.beforeEach(async (to, from, next) => {
+const whiteList = ['/login'];
+
+router.beforeEach(async (to, _from, next) => {
   NProgress.start();
 
-  const permissionStore = getPermissionStore();
-  const { whiteListRouters } = permissionStore;
-
-  const userStore = useUserStore();
-
-  if (userStore.token) {
+  if (getToken()) {
+    /* has token */
     if (to.path === '/login') {
-      next();
+      next({ path: '/' });
       return;
     }
     try {
-      await userStore.getUserInfo();
+      const userStore = useUserStore();
+      const permissionStore = getPermissionStore();
 
-      const { asyncRoutes } = permissionStore;
+      // 判断当前用户是否已拉取完 user_info 信息
+      if (userStore.roles.length === 0) {
+        await userStore.getInfo();
+      }
 
-      if (asyncRoutes && asyncRoutes.length === 0) {
-        const routeList = await permissionStore.buildAsyncRoutes();
-        routeList.forEach((item: RouteRecordRaw) => {
-          router.addRoute(item);
+      // 根据权限生成可访问的路由表
+      if (permissionStore.asyncRoutes.length === 0) {
+        const accessRoutes = await permissionStore.buildAsyncRoutes();
+        accessRoutes.forEach((route) => {
+          router.addRoute(route);
         });
+        // hack：确保 addRoute 完成后重新匹配
+        next({ path: to.fullPath, replace: true });
+        return;
+      }
 
-        if (to.name === PAGE_NOT_FOUND_ROUTE.name) {
-          // 动态添加路由后，此处应当重定向到fullPath，否则会加载404页面内容
-          next({ path: to.fullPath, replace: true, query: to.query });
-        } else {
-          // 直接基于 to 重新导航以加载动态路由；
-          // 若用 from.query.redirect 手动拼接 path+query，当 redirect 带参(如 /dashboard/base?tab=1)时
-          // to.path !== redirect 恒成立，且显式 query 会覆盖 path 内嵌参数，导致参数丢失，故统一用 to。
-          next({ ...to, replace: true });
-          return;
-        }
-      }
-      if (router.hasRoute(to.name!)) {
-        next();
-      } else {
-        next(`/`);
-      }
+      next();
     } catch (error) {
-      MessagePlugin.error((error as Error).message);
-      next({
-        path: '/login',
-        query: { redirect: to.fullPath },
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isHandledRequestError(error)) {
+        MessagePlugin.error(message);
+      }
+      await useUserStore().logout();
+      next({ path: '/login', query: { redirect: to.fullPath } });
       NProgress.done();
     }
   } else {
-    /* white list router */
-    if (whiteListRouters.includes(to.path)) {
+    // 没有 token
+    if (whiteList.includes(to.path)) {
       next();
     } else {
-      next({
-        path: '/login',
-        query: { redirect: to.fullPath },
-      });
+      next({ path: '/login', query: { redirect: to.fullPath } });
+      NProgress.done();
     }
-    NProgress.done();
   }
 });
 
-router.afterEach((to) => {
-  if (to.path === '/login') {
-    const userStore = useUserStore();
-    const permissionStore = getPermissionStore();
-
-    userStore.logout();
-    permissionStore.restoreRoutes();
-  }
+router.afterEach(() => {
   NProgress.done();
 });

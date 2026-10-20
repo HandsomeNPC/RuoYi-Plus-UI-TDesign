@@ -1,88 +1,99 @@
 import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
 
-import { t } from '@/locales';
-import { usePermissionStore } from '@/store';
-import type { UserInfo } from '@/types/interface';
+import type { LoginData } from '@/api/types';
+import { getInfo as getInfoApi, login as loginApi, logout as logoutApi } from '@/api/login';
+import { getToken, removeToken, setToken } from '@/utils/auth';
 
-const InitUserInfo: UserInfo = {
-  name: '', // 用户名，用于展示在页面右上角头像处
-  roles: [], // 前端权限模型使用 如果使用请配置modules/permission-fe.ts使用
-};
+/**
+ * 用户信息（与原项目 user store 字段一致）
+ */
+export const useUserStore = defineStore('user', () => {
+  const token = ref(getToken() ?? '');
+  const name = ref('');
+  const nickname = ref('');
+  const userId = ref<string | number>('');
+  const avatar = ref('');
+  // 用户角色编码集合 → 判断路由权限
+  const roles = ref<Array<string>>([]);
+  // 用户权限编码集合 → 判断按钮权限
+  const permissions = ref<Array<string>>([]);
 
-export const useUserStore = defineStore('user', {
-  state: () => ({
-    token: 'main_token', // 默认token不走权限
-    userInfo: { ...InitUserInfo },
-  }),
-  getters: {
-    roles: (state) => {
-      return state.userInfo?.roles;
-    },
-  },
-  actions: {
-    async login(userInfo: Record<string, unknown>) {
-      const mockLogin = async (userInfo: Record<string, unknown>) => {
-        // 登录请求流程
-        console.log(`用户信息:`, userInfo);
-        // const { account, password } = userInfo;
-        // if (account !== 'td') {
-        //   return {
-        //     code: 401,
-        //     message: t('pages.login.validation.accountNotFound'),
-        //   };
-        // }
-        // if (['main_', 'dev_'].indexOf(password) === -1) {
-        //   return {
-        //     code: 401,
-        //     message: t('pages.login.validation.passwordError'),
-        //   };
-        // }
-        // const token = {
-        //   main_: 'main_token',
-        //   dev_: 'dev_token',
-        // }[password];
-        return {
-          code: 200,
-          message: t('pages.login.loginSuccess'),
-          data: 'main_token',
-        };
-      };
+  // 兼容 starter Header.vue 读取 user.userInfo.name / roles
+  const userInfo = computed(() => ({
+    name: nickname.value || name.value || '用户',
+    roles: roles.value,
+  }));
 
-      const res = await mockLogin(userInfo);
-      if (res.code === 200) {
-        this.token = res.data;
-      } else {
-        throw res;
-      }
-    },
-    async getUserInfo() {
-      const mockRemoteUserInfo = async (token: string) => {
-        if (token === 'main_token') {
-          return {
-            name: 'Tencent',
-            roles: ['all'], // 前端权限模型使用 如果使用请配置modules/permission-fe.ts使用
-          };
-        }
-        return {
-          name: 'td_dev',
-          roles: ['UserIndex', 'DashboardBase', 'login'], // 前端权限模型使用 如果使用请配置modules/permission-fe.ts使用
-        };
-      };
-      const res = await mockRemoteUserInfo(this.token);
+  /**
+   * 登录
+   */
+  const login = async (loginData: LoginData): Promise<void> => {
+    const res = await loginApi(loginData);
+    const data = res?.data;
+    if (!data?.access_token) {
+      throw new Error('登录失败：未返回 token');
+    }
+    setToken(data.access_token);
+    token.value = data.access_token;
+  };
 
-      this.userInfo = res;
-    },
-    async logout() {
-      this.token = '';
-      this.userInfo = { ...InitUserInfo };
-    },
-  },
-  persist: {
-    afterHydrate: () => {
-      const permissionStore = usePermissionStore();
-      permissionStore.initRoutes();
-    },
-    key: 'user',
-    pick: ['token'],
-  },
+  /**
+   * 获取用户信息
+   */
+  const getInfo = async (): Promise<void> => {
+    const res = await getInfoApi();
+    const data = res?.data;
+    if (!data?.user) {
+      throw new Error('获取用户信息失败');
+    }
+    const user = data.user;
+    if (data.roles && data.roles.length > 0) {
+      roles.value = data.roles;
+      permissions.value = data.permissions;
+    } else {
+      roles.value = ['ROLE_DEFAULT'];
+    }
+    name.value = user.userName;
+    nickname.value = user.nickName;
+    avatar.value = user.avatarUrl ?? '';
+    userId.value = user.userId;
+  };
+
+  /**
+   * 注销
+   */
+  const logout = async (): Promise<void> => {
+    try {
+      await logoutApi();
+    } catch {
+      // 忽略登出接口失败，确保本地状态被清理
+    }
+    token.value = '';
+    name.value = '';
+    nickname.value = '';
+    avatar.value = '';
+    roles.value = [];
+    permissions.value = [];
+    removeToken();
+  };
+
+  const setAvatar = (value: string) => {
+    avatar.value = value;
+  };
+
+  return {
+    token,
+    name,
+    nickname,
+    userId,
+    avatar,
+    roles,
+    permissions,
+    userInfo,
+    login,
+    getInfo,
+    logout,
+    setAvatar,
+  };
 });

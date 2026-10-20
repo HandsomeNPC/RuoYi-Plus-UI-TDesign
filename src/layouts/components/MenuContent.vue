@@ -26,8 +26,9 @@
 </template>
 <script setup lang="tsx">
 import type { PropType } from 'vue';
-import { computed } from 'vue';
+import { computed, h } from 'vue';
 
+import SvgIcon from '@/components/SvgIcon/index.vue';
 import type { LocalizedTitle } from '@/locales';
 import { useLocale } from '@/locales/useLocale';
 import { getActive } from '@/router';
@@ -51,9 +52,8 @@ const list = computed(() => {
 });
 
 const menuIcon = (item: ListItemType) => {
-  if (typeof item.icon === 'string') return <t-icon name={item.icon} />;
-  const RenderIcon = item.icon;
-  return RenderIcon;
+  if (typeof item.icon === 'string') return h(SvgIcon, { iconClass: item.icon });
+  return item.icon ?? null;
 };
 
 const renderMenuTitle = (title?: LocalizedTitle) => {
