@@ -11,7 +11,7 @@ const CWD = process.cwd();
 
 // https://vitejs.dev/config/
 export default ({ mode }: ConfigEnv): UserConfig => {
-  const { VITE_BASE_URL, VITE_API_URL_PREFIX } = loadEnv(mode, CWD);
+  const { VITE_BASE_URL, VITE_API_URL, VITE_API_URL_PREFIX, VITE_APP_PORT } = loadEnv(mode, CWD);
   return {
     base: VITE_BASE_URL,
     resolve: {
@@ -35,23 +35,30 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     plugins: [
       vue(),
       vueJsx(),
+      // 仅在 mock 模式启用本地 mock，development/prod 走真实后端代理
       viteMockServe({
         mockPath: 'mock',
-        enable: true,
+        enable: mode === 'mock',
       }),
       svgLoader(),
     ],
 
     server: {
-      port: 3002,
+      port: Number(VITE_APP_PORT) || 3002,
       host: '0.0.0.0',
       allowedHosts: true,
       proxy: {
-        [VITE_API_URL_PREFIX]: 'http://127.0.0.1:3000/',
+        [VITE_API_URL_PREFIX]: {
+          target: VITE_API_URL,
+          changeOrigin: true,
+          // SSE / WebSocket 统一消息推送
+          ws: true,
+          rewrite: (path) => path.replace(new RegExp(`^${VITE_API_URL_PREFIX}`), ''),
+        },
       },
     },
 
-    // https://github.com/vueuse/vueuse/issues/5387#issuecomment-4734186040
+    // https://github.com/vueuse/core/issues/5387#issuecomment-4734180404
     build: {
       rolldownOptions: {
         onLog(level, log, defaultHandler) {
