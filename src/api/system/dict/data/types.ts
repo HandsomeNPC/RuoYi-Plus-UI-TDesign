@@ -1,8 +1,8 @@
 /** 字典数据查询参数 */
 export interface DictDataQuery extends PageQuery {
-  dictName: string;
-  dictType: string;
-  dictLabel: string;
+  dictName?: string;
+  dictType?: string;
+  dictLabel?: string;
 }
 
 /** 字典数据展示对象 */

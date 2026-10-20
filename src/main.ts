@@ -3,6 +3,9 @@ import { createApp } from 'vue';
 import TDesign from 'tdesign-vue-next';
 
 import SvgIcon from '@/components/SvgIcon/index.vue';
+import DictSelect from '@/components/DictSelect/index.vue';
+import DictTag from '@/components/DictTag/index.vue';
+import IconSelect from '@/components/IconSelect/index.vue';
 import App from './App.vue';
 import directive from './directive';
 import router from './router';
@@ -24,6 +27,16 @@ app.use(i18n);
 // 全局 SVG 图标组件（RuoYi 菜单/按钮图标）
 app.component('svg-icon', SvgIcon);
 app.component('SvgIcon', SvgIcon);
+
+// 全局字典组件（业务页 <dict-tag> / <dict-select> 直接使用）
+app.component('DictTag', DictTag);
+app.component('dict-tag', DictTag);
+app.component('DictSelect', DictSelect);
+app.component('dict-select', DictSelect);
+
+// 全局图标选择器
+app.component('IconSelect', IconSelect);
+app.component('icon-select', IconSelect);
 
 // 全局自定义指令（v-hasPermi / v-hasRoles）
 directive(app);

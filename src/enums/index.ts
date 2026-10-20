@@ -47,3 +47,15 @@ export enum HttpStatus {
   /** 系统警告消息 */
   WARN = 601,
 }
+
+/**
+ * 菜单类型
+ */
+export enum MenuTypeEnum {
+  /** 目录 */
+  M = 'M',
+  /** 菜单 */
+  C = 'C',
+  /** 按钮 */
+  F = 'F',
+}

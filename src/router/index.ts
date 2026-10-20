@@ -50,6 +50,19 @@ export const constantRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/user',
+    component: LAYOUT,
+    redirect: '/user/profile',
+    children: [
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/pages/system/user/profile/index.vue'),
+        meta: { title: { zh_CN: '个人中心', en_US: 'Profile' }, icon: 'user', breadcrumb: false },
+      },
+    ],
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/pages/result/404/index.vue'),
