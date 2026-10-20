@@ -32,6 +32,16 @@ export const constantRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/register/index.vue'),
   },
   {
+    path: '/401',
+    name: 'NoAuth',
+    component: () => import('@/pages/error/401.vue'),
+  },
+  {
+    path: '/social-callback',
+    name: 'SocialCallback',
+    component: () => import('@/pages/social-callback/index.vue'),
+  },
+  {
     path: '/redirect',
     component: LAYOUT,
     children: [

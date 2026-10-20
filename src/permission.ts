@@ -13,14 +13,14 @@ NProgress.configure({ showSpinner: false });
 
 const whiteList = ['/login'];
 
-router.beforeEach(async (to, _from, next) => {
+// Vue Router 5：守卫返回值而非调用 next(value)
+router.beforeEach(async (to, _from) => {
   NProgress.start();
 
   if (getToken()) {
     /* has token */
     if (to.path === '/login') {
-      next({ path: '/' });
-      return;
+      return { path: '/' };
     }
     try {
       const userStore = useUserStore();
@@ -41,11 +41,10 @@ router.beforeEach(async (to, _from, next) => {
           router.addRoute(route);
         });
         // hack：确保 addRoute 完成后重新匹配
-        next({ path: to.fullPath, replace: true });
-        return;
+        return { path: to.fullPath, replace: true };
       }
 
-      next();
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!isHandledRequestError(error)) {
@@ -53,18 +52,17 @@ router.beforeEach(async (to, _from, next) => {
       }
       closePush();
       await useUserStore().logout();
-      next({ path: '/login', query: { redirect: to.fullPath } });
       NProgress.done();
-    }
-  } else {
-    // 没有 token
-    if (whiteList.includes(to.path)) {
-      next();
-    } else {
-      next({ path: '/login', query: { redirect: to.fullPath } });
-      NProgress.done();
+      return { path: '/login', query: { redirect: to.fullPath } };
     }
   }
+
+  // 没有 token
+  if (whiteList.includes(to.path)) {
+    return true;
+  }
+  NProgress.done();
+  return { path: '/login', query: { redirect: to.fullPath } };
 });
 
 router.afterEach(() => {

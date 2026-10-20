@@ -102,6 +102,16 @@ export const updateUserProfile = (data: UserProfileForm) => {
   });
 };
 
+// 上传用户头像
+export const uploadAvatar = (data: FormData): AxiosPromise<{ imgUrl: string }> => {
+  return request({
+    url: '/system/user/profile/avatar',
+    method: 'post',
+    headers: { 'Content-Type': 'multipart/form-data' },
+    data,
+  });
+};
+
 // 用户修改自身密码
 export const updateUserPwd = (oldPassword: string, newPassword: string) => {
   return request({

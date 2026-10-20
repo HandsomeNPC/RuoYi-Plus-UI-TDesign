@@ -98,7 +98,7 @@
           ></t-col>
         </t-row>
         <t-form-item label="内容" name="noticeContent"
-          ><t-textarea v-model="form.noticeContent" :autosize="{ minRows: 5 }" placeholder="请输入公告内容"
+          ><editor v-model="form.noticeContent" height="280px"
         /></t-form-item>
         <t-form-item label="备注" name="remark"
           ><t-textarea v-model="form.remark" :autosize="{ minRows: 2 }" placeholder="请输入备注"

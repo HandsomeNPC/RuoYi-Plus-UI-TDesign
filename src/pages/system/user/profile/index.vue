@@ -4,7 +4,11 @@
       <t-col :lg="6" :xs="24">
         <t-card :bordered="false">
           <div class="user-center">
-            <t-avatar :image="avatarUrl" size="80px" />
+            <div class="avatar-wrap" @click="avatarInput?.click()">
+              <t-avatar :image="avatarUrl" size="80px" />
+              <div class="avatar-mask">修改头像</div>
+            </div>
+            <input ref="avatarInput" accept="image/*" style="display: none" type="file" @change="onAvatarChange" />
             <div class="user-name">{{ form.nickName || form.userName }}</div>
             <div class="user-role">{{ roleGroup || '—' }}</div>
           </div>
@@ -57,6 +61,45 @@
                 </t-form-item>
               </t-form>
             </t-tab-panel>
+            <t-tab-panel label="在线设备" value="device">
+              <t-table
+                :columns="deviceColumns"
+                :data="onlineDevices"
+                :loading="deviceLoading"
+                hover
+                row-key="tokenId"
+                stripe
+              >
+                <template #loginTime="{ row }">{{ parseTime(row.loginTime) }}</template>
+                <template #operation="{ row }">
+                  <t-popconfirm content="确认下线该设备?" @confirm="handleDelOnline(row)">
+                    <t-link hover="color" theme="danger">下线</t-link>
+                  </t-popconfirm>
+                </template>
+              </t-table>
+            </t-tab-panel>
+            <t-tab-panel label="第三方账号" value="social">
+              <t-table
+                :columns="socialColumns"
+                :data="socialList"
+                :loading="socialLoading"
+                hover
+                row-key="authId"
+                stripe
+              >
+                <template #operation="{ row }">
+                  <t-popconfirm content="确认解绑?" @confirm="handleUnlock(row)">
+                    <t-link hover="color" theme="danger">解绑</t-link>
+                  </t-popconfirm>
+                </template>
+              </t-table>
+              <div style="margin-top: 12px">
+                <t-space>
+                  <t-button theme="primary" variant="outline" @click="bindSocial('gitee')">绑定 Gitee</t-button>
+                  <t-button theme="primary" variant="outline" @click="bindSocial('dingtalk')">绑定 钉钉</t-button>
+                </t-space>
+              </div>
+            </t-tab-panel>
           </t-tabs>
         </t-card>
       </t-col>
@@ -70,7 +113,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { reactive, ref } from 'vue';
 
 import type { UserProfileForm } from '@/api/system/user/types';
-import { getUserProfile, updateUserProfile, updateUserPwd } from '@/api/system/user';
+import { getUserProfile, updateUserProfile, updateUserPwd, uploadAvatar } from '@/api/system/user';
 import { useUserStore } from '@/store';
 import { useDict } from '@/utils/dict';
 
@@ -165,7 +208,93 @@ const handleClose = () => {
   window.history.length > 1 ? window.history.back() : null;
 };
 
+// ---- 头像上传 ----
+const avatarInput = ref<HTMLInputElement | null>(null);
+const onAvatarChange = async (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('avatarfile', file);
+  try {
+    const res = await uploadAvatar(formData);
+    const url = res?.data?.imgUrl;
+    if (url) {
+      avatarUrl.value = url;
+      userStore.avatar = url;
+      MessagePlugin.success('上传成功');
+    }
+  } catch {
+    MessagePlugin.error('上传失败');
+  } finally {
+    target.value = '';
+  }
+};
+
+// ---- 在线设备 ----
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { delOnline, getOnline } from '@/api/monitor/online';
+import { authRouterUrl, authUnlock, getAuthList } from '@/api/system/social/auth';
+import type { OnlineVO } from '@/api/monitor/online/types';
+import { parseTime } from '@/utils/ruoyi';
+
+const onlineDevices = ref<OnlineVO[]>([]);
+const deviceLoading = ref(false);
+const deviceColumns: PrimaryTableCol[] = [
+  { colKey: 'ipaddr', title: 'IP', width: 150 },
+  { colKey: 'loginLocation', title: '登录地点', width: 160, ellipsis: true },
+  { colKey: 'browser', title: '浏览器', width: 140 },
+  { colKey: 'os', title: '操作系统', width: 160 },
+  { colKey: 'loginTime', title: '登录时间', width: 180 },
+  { colKey: 'operation', title: '操作', width: 100, align: 'center' },
+];
+const loadOnline = async () => {
+  deviceLoading.value = true;
+  try {
+    const res = await getOnline();
+    onlineDevices.value = (res?.data ?? []) as OnlineVO[];
+  } finally {
+    deviceLoading.value = false;
+  }
+};
+const handleDelOnline = async (row: OnlineVO) => {
+  await delOnline(row.tokenId);
+  MessagePlugin.success('下线成功');
+  loadOnline();
+};
+
+// ---- 第三方账号 ----
+const socialList = ref<any[]>([]);
+const socialLoading = ref(false);
+const socialColumns: PrimaryTableCol[] = [
+  { colKey: 'source', title: '平台', width: 140 },
+  { colKey: 'userName', title: '账号', width: 200, ellipsis: true },
+  { colKey: 'operation', title: '操作', width: 100, align: 'center' },
+];
+const loadSocial = async () => {
+  socialLoading.value = true;
+  try {
+    const res = await getAuthList();
+    socialList.value = (res?.data ?? []) as any[];
+  } finally {
+    socialLoading.value = false;
+  }
+};
+const handleUnlock = async (row: any) => {
+  await authUnlock(row.authId);
+  MessagePlugin.success('解绑成功');
+  loadSocial();
+};
+const bindSocial = async (source: string) => {
+  const res: any = await authRouterUrl(source);
+  if (res?.data) {
+    window.location.href = res.data;
+  }
+};
+
 loadProfile();
+loadOnline();
+loadSocial();
 </script>
 
 <style lang="less" scoped>
@@ -178,6 +307,28 @@ loadProfile();
   align-items: center;
   gap: 8px;
   padding: 8px 0;
+}
+.avatar-wrap {
+  position: relative;
+  cursor: pointer;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.avatar-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.2s;
+  border-radius: 50%;
+}
+.avatar-wrap:hover .avatar-mask {
+  opacity: 1;
 }
 .user-name {
   font-size: 18px;

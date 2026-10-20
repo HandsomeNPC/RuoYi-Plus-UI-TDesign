@@ -44,6 +44,15 @@ function processRoute(route: any, isTop: boolean) {
   if (!route.meta) route.meta = {};
   route.meta.title = toLocalizedTitle(route.meta.title);
 
+  // RuoYi 菜单 visible/status → starter 侧边栏 hidden
+  // visible: '0' 显示 / '1' 隐藏（动态打开的路由，如分配角色，不应出现在菜单）
+  // status:  '0' 正常 / '1' 停用（停用菜单不展示）
+  const visible = route.meta.visible;
+  const status = route.meta.status;
+  if (visible === '1' || visible === 1 || status === '1' || status === 1) {
+    route.meta.hidden = true;
+  }
+
   const comp = route.component?.toString();
   if (comp === 'Layout' || comp === 'LAYOUT') {
     route.component = LAYOUT;

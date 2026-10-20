@@ -30,6 +30,7 @@
               <t-icon name="help-circle" />
             </t-button>
           </t-tooltip>
+          <screenfull />
           <language-switcher />
           <t-dropdown :min-column-width="120" trigger="click">
             <template #dropdown>
@@ -66,6 +67,7 @@ import { useRouter } from 'vue-router';
 
 import LogoFull from '@/assets/assets-logo-full.svg?component';
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue';
+import Screenfull from '@/components/Screenfull/index.vue';
 import { prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';

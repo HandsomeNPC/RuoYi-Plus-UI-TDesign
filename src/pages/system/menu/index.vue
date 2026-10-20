@@ -59,7 +59,7 @@
           </span>
         </template>
         <template #menuType="{ row }">
-          <t-tag :theme="typeMeta(row.menuType).theme" variant="light">{{ typeMeta(row.menuType).label }}</t-tag>
+          <t-tag :theme="typeMeta(row).theme" variant="light">{{ typeMeta(row).label }}</t-tag>
         </template>
         <template #status="{ row }">
           <dict-tag :options="sys_normal_disable" :value="row.status" />
@@ -141,24 +141,30 @@
           </t-col>
         </t-row>
 
-        <t-form-item v-if="form.menuType === 'F'" label="权限标识" name="perms">
-          <t-input v-model="form.perms" placeholder="如 system:user:add" />
-        </t-form-item>
-
-        <t-row v-if="form.menuType === 'C'">
+        <t-row v-if="form.menuType !== 'M'">
           <t-col :span="12">
-            <t-form-item label="是否外链" name="isFrame">
-              <t-radio-group v-model="form.isFrame">
-                <t-radio value="0">否</t-radio>
-                <t-radio value="1">是</t-radio>
-              </t-radio-group>
+            <t-form-item label="权限标识" name="perms">
+              <t-input v-model="form.perms" placeholder="如 system:user:list" />
             </t-form-item>
           </t-col>
+          <t-col v-if="form.menuType === 'C'" :span="12">
+            <t-form-item label="路由参数" name="queryParam">
+              <t-input v-model="form.queryParam" placeholder='如 {"id": 1}' />
+            </t-form-item>
+          </t-col>
+        </t-row>
+
+        <t-row v-if="form.menuType !== 'F'">
           <t-col :span="12">
+            <t-form-item label="是否外链" name="isFrame">
+              <dict-select v-model="form.isFrame" placeholder="请选择" type="sys_yes_no" />
+            </t-form-item>
+          </t-col>
+          <t-col v-if="form.menuType === 'C'" :span="12">
             <t-form-item label="是否缓存" name="isCache">
               <t-radio-group v-model="form.isCache">
-                <t-radio value="0">缓存</t-radio>
-                <t-radio value="1">不缓存</t-radio>
+                <t-radio value="Y">缓存</t-radio>
+                <t-radio value="N">不缓存</t-radio>
               </t-radio-group>
             </t-form-item>
           </t-col>
@@ -173,6 +179,14 @@
           <t-col :span="12">
             <t-form-item label="菜单状态" name="status">
               <dict-select v-model="form.status" placeholder="请选择" type="sys_normal_disable" />
+            </t-form-item>
+          </t-col>
+        </t-row>
+
+        <t-row v-if="form.visible !== '0'">
+          <t-col :span="12">
+            <t-form-item label="激活路由" name="activeMenu">
+              <t-input v-model="form.activeMenu" placeholder="如 /system/user" />
             </t-form-item>
           </t-col>
         </t-row>
@@ -198,7 +212,7 @@ import { handleTree, parseTime } from '@/utils/ruoyi';
 
 defineOptions({ name: 'SystemMenu' });
 
-const { sys_normal_disable, sys_show_hide } = useDict('sys_normal_disable', 'sys_show_hide');
+const { sys_normal_disable, sys_show_hide, sys_yes_no } = useDict('sys_normal_disable', 'sys_show_hide', 'sys_yes_no');
 
 const menuList = ref<MenuVO[]>([]);
 const loading = ref(false);
@@ -246,14 +260,15 @@ const toggleExpand = () => {
   else tableRef.value?.foldAll?.();
 };
 
-const typeMeta = (t: string): { label: string; theme: any } => {
+const typeMeta = (row: any): { label: string; theme: any } => {
+  const t = row?.menuType;
+  if (t === 'F') return { label: '按钮', theme: 'warning' };
+  if (row?.isFrame === 'Y') return { label: '外链', theme: 'danger' };
   switch (t) {
     case 'M':
       return { label: '目录', theme: 'primary' };
     case 'C':
       return { label: '菜单', theme: 'success' };
-    case 'F':
-      return { label: '按钮', theme: 'warning' };
     default:
       return { label: t, theme: 'default' };
   }
@@ -274,8 +289,8 @@ const initForm = (): MenuForm => ({
   path: '',
   component: '',
   queryParam: '',
-  isFrame: '0',
-  isCache: '0',
+  isFrame: 'N',
+  isCache: 'Y',
   menuType: 'M',
   visible: '0',
   status: '0',

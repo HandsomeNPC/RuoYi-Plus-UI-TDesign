@@ -2,8 +2,9 @@
   <div class="user-page">
     <t-row :gutter="12">
       <!-- 左侧部门树 -->
-      <t-col :lg="4" :xs="24">
+      <t-col :lg="5" :xs="24">
         <t-card :bordered="false" class="dept-card">
+          <template #title><div class="card-title">部门</div></template>
           <div class="dept-search">
             <t-input v-model="deptFilter" clearable placeholder="部门名称">
               <template #prefix-icon><t-icon name="search" /></template>
@@ -11,7 +12,7 @@
           </div>
           <div class="dept-tree-wrap">
             <t-tree
-              :data="deptTreeData"
+              :data="filteredDeptTree"
               :keys="{ label: 'label', value: 'id', children: 'children' }"
               activable
               expand-all
@@ -23,7 +24,7 @@
       </t-col>
 
       <!-- 右侧用户列表 -->
-      <t-col :lg="20" :xs="24">
+      <t-col :lg="19" :xs="24">
         <t-card :bordered="false">
           <template #title><div class="card-title">用户管理</div></template>
 
@@ -97,6 +98,9 @@
             <template #createTime="{ row }">{{ parseTime(row.createTime) }}</template>
             <template #operation="{ row }">
               <t-space :breakLine="false" size="small">
+                <t-link v-hasPermi="['system:user:query']" hover="color" theme="primary" @click="handleView(row)"
+                  >详细</t-link
+                >
                 <t-link v-hasPermi="['system:user:edit']" hover="color" theme="primary" @click="handleUpdate(row)"
                   >修改</t-link
                 >
@@ -219,6 +223,31 @@
         /></t-form-item>
       </t-form>
     </t-dialog>
+
+    <!-- 用户详情 抽屉 -->
+    <t-drawer v-model:visible="viewVisible" :footer="false" header="用户信息详情" size="480px">
+      <t-descriptions v-if="viewData" :column="2" bordered>
+        <t-descriptions-item label="用户名称">{{ viewData.nickName }}</t-descriptions-item>
+        <t-descriptions-item label="归属部门">{{
+          viewData.deptName || viewData.dept?.deptName || '-'
+        }}</t-descriptions-item>
+        <t-descriptions-item label="手机号码">{{ viewData.phoneNumber || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="邮箱">{{ viewData.email || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="登录账号">{{ viewData.userName }}</t-descriptions-item>
+        <t-descriptions-item label="用户状态">
+          <dict-tag :options="sys_normal_disable" :value="viewData.status" />
+        </t-descriptions-item>
+        <t-descriptions-item label="性别">
+          <dict-tag :options="sys_user_sex" :value="viewData.gender" />
+        </t-descriptions-item>
+        <t-descriptions-item label="岗位">{{ viewInfo?.postGroup || '-' }}</t-descriptions-item>
+        <t-descriptions-item :span="2" label="角色">{{ viewInfo?.roleGroup || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="创建时间">{{ parseTime(viewData.createTime) }}</t-descriptions-item>
+        <t-descriptions-item label="最后登录">{{ parseTime(viewData.loginDate) }}</t-descriptions-item>
+        <t-descriptions-item label="最后登录IP">{{ viewData.loginIp || '-' }}</t-descriptions-item>
+        <t-descriptions-item label="备注">{{ viewData.remark || '-' }}</t-descriptions-item>
+      </t-descriptions>
+    </t-drawer>
   </div>
 </template>
 
@@ -275,6 +304,22 @@ const columns: PrimaryTableCol[] = [
 const deptTreeData = ref<any[]>([]);
 const deptOptions = ref<any[]>([]);
 const deptFilter = ref('');
+
+const filterDeptNode = (nodes: any[], kw: string): any[] => {
+  const res: any[] = [];
+  nodes.forEach((n) => {
+    const children = n.children?.length ? filterDeptNode(n.children, kw) : [];
+    if (n.label?.toLowerCase().includes(kw) || children.length) {
+      res.push({ ...n, children: children.length ? children : n.children });
+    }
+  });
+  return res;
+};
+const filteredDeptTree = computed(() => {
+  const kw = deptFilter.value.trim().toLowerCase();
+  if (!kw) return deptTreeData.value;
+  return filterDeptNode(deptTreeData.value, kw);
+});
 
 const loadDeptTree = async () => {
   const res = await deptTreeSelect();
@@ -457,6 +502,17 @@ const onResetPwd = async () => {
   } finally {
     resettingPwd.value = false;
   }
+};
+
+// ---- 用户详情 ----
+const viewVisible = ref(false);
+const viewData = ref<UserVO | null>(null);
+const viewInfo = ref<any>(null);
+const handleView = async (row: UserVO) => {
+  const res = await getUser(row.userId);
+  viewInfo.value = res?.data ?? null;
+  viewData.value = res?.data?.user ?? row;
+  viewVisible.value = true;
 };
 
 loadDeptTree();

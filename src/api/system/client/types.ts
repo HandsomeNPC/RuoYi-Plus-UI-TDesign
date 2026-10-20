@@ -1,0 +1,40 @@
+export interface ClientVO {
+  id: string | number;
+  clientId: string;
+  clientKey: string;
+  clientSecret: string;
+  grantTypeList: string[];
+  deviceType: string;
+  accessPath?: string;
+  accessPathList?: string[];
+  ipWhitelist?: string;
+  ipWhitelistList?: string[];
+  activeTimeout: number;
+  timeout: number;
+  status: string;
+}
+
+export interface ClientForm extends BaseEntity {
+  id?: string | number;
+  clientId?: string | number;
+  clientKey?: string;
+  clientSecret?: string;
+  grantTypeList?: string[];
+  deviceType?: string;
+  accessPath?: string;
+  accessPathList?: string[];
+  ipWhitelist?: string;
+  ipWhitelistList?: string[];
+  activeTimeout?: number;
+  timeout?: number;
+  status?: string;
+  remark?: string;
+}
+
+export interface ClientQuery extends PageQuery {
+  clientId?: string | number;
+  clientKey?: string;
+  grantType?: string;
+  deviceType?: string;
+  status?: string;
+}

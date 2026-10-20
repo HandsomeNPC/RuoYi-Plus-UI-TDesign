@@ -74,6 +74,22 @@ export function getCodeImg(): AxiosPromise<VerifyCodeResult> {
 }
 
 /**
+ * 第三方登录回调
+ */
+export function callback(data: LoginData): AxiosPromise<LoginResult> {
+  const params = {
+    ...data,
+    clientId,
+    grantType: 'social',
+  };
+  return request({
+    url: '/auth/social/callback',
+    method: 'post',
+    data: params,
+  });
+}
+
+/**
  * 获取用户详细信息
  */
 export function getInfo(): AxiosPromise<{

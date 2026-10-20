@@ -5,7 +5,7 @@
         <t-input v-model="filter" clearable placeholder="搜索图标名称" size="small">
           <template #prefix-icon><t-icon name="search" /></template>
         </t-input>
-        <t-scroll-view class="icon-scroll" type="scroll">
+        <div class="icon-scroll">
           <div class="icon-grid">
             <div
               v-for="name in filtered"
@@ -18,7 +18,7 @@
               <svg-icon :icon-class="name" />
             </div>
           </div>
-        </t-scroll-view>
+        </div>
       </div>
     </template>
     <t-input :value="modelValue" clearable placeholder="点击选择图标" readonly @clear="pick('')">

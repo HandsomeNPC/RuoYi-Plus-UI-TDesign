@@ -113,29 +113,183 @@
       </div>
     </t-drawer>
 
-    <!-- 配置编辑（占位：完整配置编辑器待后续补全） -->
+    <!-- 配置编辑（3 栏：基本/字段/生成） -->
     <t-dialog
       v-model:visible="editVisible"
       :confirm-btn="{ loading: saving }"
       :on-confirm="handleSaveConfig"
       header="修改表配置"
-      width="720px"
+      width="960px"
     >
-      <t-alert
-        message="完整代码生成配置编辑器（基本信息/字段配置/生成配置三栏）尚未迁移，当前仅保存基础信息。"
-        style="margin-bottom: 12px"
-        theme="warning"
-      />
-      <t-form :data="editForm" label-width="120px">
-        <t-form-item label="表名称"><t-input v-model="editForm.tableName" /></t-form-item>
-        <t-form-item label="表描述"><t-input v-model="editForm.tableComment" /></t-form-item>
-        <t-form-item label="实体类名称"><t-input v-model="editForm.className" /></t-form-item>
-        <t-form-item label="生成包路径"><t-input v-model="editForm.packageName" /></t-form-item>
-        <t-form-item label="生成模块名"><t-input v-model="editForm.moduleName" /></t-form-item>
-        <t-form-item label="生成业务名"><t-input v-model="editForm.businessName" /></t-form-item>
-        <t-form-item label="生成功能名"><t-input v-model="editForm.functionName" /></t-form-item>
-        <t-form-item label="备注"><t-textarea v-model="editForm.remark" :autosize="{ minRows: 2 }" /></t-form-item>
-      </t-form>
+      <t-tabs v-model="editTab">
+        <!-- 基本信息 -->
+        <t-tab-panel label="基本信息" value="basic">
+          <t-form :data="editForm" label-width="120px">
+            <t-row>
+              <t-col :span="12"
+                ><t-form-item label="表名称"><t-input v-model="editForm.tableName" /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="表描述"><t-input v-model="editForm.tableComment" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row>
+              <t-col :span="12"
+                ><t-form-item label="实体类名称"><t-input v-model="editForm.className" /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="作者"><t-input v-model="editForm.functionAuthor" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-form-item label="备注"><t-textarea v-model="editForm.remark" :autosize="{ minRows: 2 }" /></t-form-item>
+          </t-form>
+        </t-tab-panel>
+
+        <!-- 字段信息 -->
+        <t-tab-panel label="字段信息" value="columns">
+          <t-table :columns="colColumns" :data="editColumns" hover max-height="420" row-key="columnId" stripe>
+            <template #isInsert="{ row }"><t-switch v-model="row.isInsert" :custom-value="['1', '0']" /></template>
+            <template #isEdit="{ row }"><t-switch v-model="row.isEdit" :custom-value="['1', '0']" /></template>
+            <template #isList="{ row }"><t-switch v-model="row.isList" :custom-value="['1', '0']" /></template>
+            <template #isQuery="{ row }"><t-switch v-model="row.isQuery" :custom-value="['1', '0']" /></template>
+            <template #isRequired="{ row }"><t-switch v-model="row.isRequired" :custom-value="['1', '0']" /></template>
+            <template #javaType="{ row }">
+              <t-select v-model="row.javaType" :options="javaTypeOptions" size="small" />
+            </template>
+            <template #htmlType="{ row }">
+              <t-select v-model="row.htmlType" :options="htmlTypeOptions" size="small" />
+            </template>
+            <template #queryType="{ row }">
+              <t-select v-model="row.queryType" :options="queryTypeOptions" size="small" />
+            </template>
+          </t-table>
+        </t-tab-panel>
+
+        <!-- 生成信息 -->
+        <t-tab-panel label="生成信息" value="gen">
+          <t-form :data="editForm" label-width="120px">
+            <t-row>
+              <t-col :span="12"
+                ><t-form-item label="生成模板"
+                  ><t-select v-model="editForm.tplCategory" :options="tplOptions" /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="前端模板"
+                  ><t-select v-model="editForm.frontendType" :options="frontendOptions" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row>
+              <t-col :span="12"
+                ><t-form-item label="生成包路径"><t-input v-model="editForm.packageName" /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="生成模块名"><t-input v-model="editForm.moduleName" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row>
+              <t-col :span="12"
+                ><t-form-item label="生成业务名"><t-input v-model="editForm.businessName" /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="生成功能名"><t-input v-model="editForm.functionName" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row>
+              <t-col :span="6"
+                ><t-form-item label="启用导出"><t-switch v-model="editForm.enableExport" /></t-form-item
+              ></t-col>
+              <t-col :span="6"
+                ><t-form-item label="启用状态"><t-switch v-model="editForm.enableStatus" /></t-form-item
+              ></t-col>
+              <t-col :span="6"
+                ><t-form-item label="启用排序"><t-switch v-model="editForm.enableSort" /></t-form-item
+              ></t-col>
+              <t-col :span="6"
+                ><t-form-item label="启用唯一"><t-switch v-model="editForm.enableUnique" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row v-if="editForm.enableStatus">
+              <t-col :span="12"
+                ><t-form-item label="状态字段"
+                  ><t-select
+                    v-model="editForm.statusField"
+                    :options="columnOptions"
+                    clearable
+                    filterable /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row v-if="editForm.enableSort">
+              <t-col :span="12"
+                ><t-form-item label="排序字段"
+                  ><t-select v-model="editForm.sortField" :options="columnOptions" clearable filterable /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row v-if="editForm.enableUnique">
+              <t-col :span="12"
+                ><t-form-item label="唯一字段"
+                  ><t-select
+                    v-model="editForm.uniqueFields"
+                    :options="columnOptions"
+                    clearable
+                    filterable
+                    multiple /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row v-if="editForm.tplCategory === 'tree'">
+              <t-col :span="12"
+                ><t-form-item label="树编码字段"
+                  ><t-select v-model="editForm.treeCode" :options="columnOptions" clearable filterable /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="树父编码"
+                  ><t-select
+                    v-model="editForm.treeParentCode"
+                    :options="columnOptions"
+                    clearable
+                    filterable /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row v-if="editForm.tplCategory === 'tree'">
+              <t-col :span="12"
+                ><t-form-item label="树名称字段"
+                  ><t-select v-model="editForm.treeName" :options="columnOptions" clearable filterable /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="树根值"
+                  ><t-input v-model="editForm.treeRootValue" placeholder="如 0" /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-row v-if="editForm.tplCategory === 'tree'">
+              <t-col :span="12"
+                ><t-form-item label="祖级字段"
+                  ><t-select
+                    v-model="editForm.treeAncestorsField"
+                    :options="columnOptions"
+                    clearable
+                    filterable /></t-form-item
+              ></t-col>
+              <t-col :span="12"
+                ><t-form-item label="树排序字段"
+                  ><t-select
+                    v-model="editForm.treeOrderField"
+                    :options="columnOptions"
+                    clearable
+                    filterable /></t-form-item
+              ></t-col>
+            </t-row>
+            <t-form-item label="父菜单"
+              ><t-tree-select
+                v-model="editForm.parentMenuId"
+                :data="menuTreeOptions"
+                :keys="{ label: 'label', value: 'value', children: 'children' }"
+                clearable
+                filterable
+                placeholder="生成菜单挂载位置"
+            /></t-form-item>
+            <t-form-item label="备注"><t-textarea v-model="editForm.remark" :autosize="{ minRows: 2 }" /></t-form-item>
+          </t-form>
+        </t-tab-panel>
+      </t-tabs>
     </t-dialog>
   </div>
 </template>
@@ -144,7 +298,7 @@
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { AddIcon, DownloadIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import type { DbTableVO, PreviewResult, TableQuery, TableVO } from '@/api/tool/gen/types';
 import {
@@ -152,6 +306,7 @@ import {
   delTable,
   genCode,
   getDataNames,
+  getGenTable,
   importTable,
   listDbTable,
   listTable,
@@ -159,6 +314,7 @@ import {
   synchDb,
   updateGenTable,
 } from '@/api/tool/gen';
+import { treeselect as menuTreeselect } from '@/api/system/menu';
 import { download } from '@/utils/request';
 import { parseTime } from '@/utils/ruoyi';
 
@@ -333,24 +489,132 @@ const handleImport = async () => {
 const editVisible = ref(false);
 const saving = ref(false);
 const editForm = reactive<any>({});
+const editTab = ref('basic');
+const editColumns = ref<any[]>([]);
+
+// 列字段下拉选项（用于状态/排序/唯一/树字段选择）
+const columnOptions = computed(() =>
+  editColumns.value.map((c) => ({
+    label: `${c.columnName}${c.columnComment ? ': ' + c.columnComment : ''}`,
+    value: c.columnName,
+  })),
+);
+
+// 父菜单树选项
+const menuTreeOptions = ref<any[]>([]);
+const toMenuTree = (nodes: any[]): any[] =>
+  (nodes || []).map((n) => ({
+    label: n.label,
+    value: n.id,
+    children: n.children?.length ? toMenuTree(n.children) : undefined,
+  }));
+
+const colColumns: PrimaryTableCol[] = [
+  { colKey: 'columnComment', title: '字段列名', width: 160, ellipsis: true },
+  { colKey: 'columnType', title: '物理类型', width: 140, ellipsis: true },
+  { colKey: 'javaType', title: 'Java类型', width: 140 },
+  { colKey: 'javaField', title: 'Java属性', width: 140, edit: { component: 't-input' } },
+  { colKey: 'isInsert', title: '插入', width: 70, align: 'center' },
+  { colKey: 'isEdit', title: '编辑', width: 70, align: 'center' },
+  { colKey: 'isList', title: '列表', width: 70, align: 'center' },
+  { colKey: 'isQuery', title: '查询', width: 70, align: 'center' },
+  { colKey: 'isRequired', title: '必填', width: 70, align: 'center' },
+  { colKey: 'queryType', title: '查询方式', width: 120 },
+  { colKey: 'htmlType', title: '显示类型', width: 120 },
+];
+
+const javaTypeOptions = [
+  { label: 'String', value: 'String' },
+  { label: 'Long', value: 'Long' },
+  { label: 'Integer', value: 'Integer' },
+  { label: 'Double', value: 'Double' },
+  { label: 'BigDecimal', value: 'BigDecimal' },
+  { label: 'Date', value: 'Date' },
+  { label: 'Boolean', value: 'Boolean' },
+];
+const htmlTypeOptions = [
+  { label: '文本框', value: 'input' },
+  { label: '文本域', value: 'textarea' },
+  { label: '下拉框', value: 'select' },
+  { label: '单选框', value: 'radio' },
+  { label: '复选框', value: 'checkbox' },
+  { label: '日期控件', value: 'datetime' },
+  { label: '图片上传', value: 'imageUpload' },
+  { label: '文件上传', value: 'fileUpload' },
+];
+const queryTypeOptions = [
+  { label: '等于', value: 'EQ' },
+  { label: '不等于', value: 'NE' },
+  { label: '大于', value: 'GT' },
+  { label: '大于等于', value: 'GTE' },
+  { label: '小于', value: 'LT' },
+  { label: '小于等于', value: 'LTE' },
+  { label: '模糊', value: 'LIKE' },
+];
+const tplOptions = [
+  { label: '单表（增删改查）', value: 'crud' },
+  { label: '树表（增删改查）', value: 'tree' },
+  { label: '主子表（增删改查）', value: 'sub' },
+];
+const frontendOptions = [
+  { label: 'Vue2', value: 'vue' },
+  { label: 'Vue3', value: 'vue3' },
+];
+
 const handleEdit = async (row: TableVO) => {
+  editTab.value = 'basic';
+  const res = await getGenTable(row.tableId);
+  const data = res?.data as any;
+  const t = data?.table ?? row;
   Object.assign(editForm, {
-    tableId: row.tableId,
-    tableName: row.tableName,
-    tableComment: row.tableComment,
-    className: row.className,
-    packageName: '',
-    moduleName: row.moduleName,
-    businessName: row.businessName,
-    functionName: row.functionName,
-    remark: row.remark,
+    tableId: t.tableId,
+    tableName: t.tableName,
+    tableComment: t.tableComment,
+    className: t.className,
+    functionAuthor: t.functionAuthor,
+    packageName: t.packageName,
+    moduleName: t.moduleName,
+    businessName: t.businessName,
+    functionName: t.functionName,
+    tplCategory: t.tplCategory ?? 'crud',
+    frontendType: t.frontendType ?? 'vue3',
+    enableExport: !!t.enableExport,
+    enableStatus: !!t.enableStatus,
+    enableSort: !!t.enableSort,
+    enableUnique: !!t.enableUnique,
+    statusField: t.statusField ?? '',
+    sortField: t.sortField ?? '',
+    uniqueFields: t.uniqueFields ?? [],
+    treeCode: t.treeCode ?? '',
+    treeParentCode: t.treeParentCode ?? '',
+    treeName: t.treeName ?? '',
+    treeRootValue: t.treeRootValue ?? '',
+    treeAncestorsField: t.treeAncestorsField ?? '',
+    treeOrderField: t.treeOrderField ?? '',
+    parentMenuId: t.parentMenuId ?? 0,
+    remark: t.remark,
   });
+  // 父菜单树
+  try {
+    const mres = await menuTreeselect();
+    menuTreeOptions.value = [{ label: '主类目', value: 0 }, ...toMenuTree(mres?.data ?? [])];
+  } catch {
+    menuTreeOptions.value = [{ label: '主类目', value: 0 }];
+  }
+  editColumns.value = (data?.rows ?? []).map((c: any) => ({
+    ...c,
+    isInsert: String(c.isInsert ?? '0'),
+    isEdit: String(c.isEdit ?? '0'),
+    isList: String(c.isList ?? '0'),
+    isQuery: String(c.isQuery ?? '0'),
+    isRequired: String(c.isRequired ?? '0'),
+  }));
   editVisible.value = true;
 };
 const handleSaveConfig = async () => {
   saving.value = true;
   try {
-    await updateGenTable(editForm);
+    await updateGenTable({ ...editForm, columns: editColumns.value });
     MessagePlugin.success('保存成功');
     editVisible.value = false;
     getList();

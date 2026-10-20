@@ -1,5 +1,6 @@
 import type { PageResult } from '@/api/types';
 import type { AxiosPromise } from '@/utils/api-types';
+import type { UserQuery, UserVO } from '@/api/system/user/types';
 import request from '@/utils/request';
 
 import type { RoleDeptTree, RoleForm, RoleQuery, RoleVO } from './types';
@@ -86,6 +87,31 @@ export const deptTreeSelect = (roleId: string | number): AxiosPromise<RoleDeptTr
     url: '/system/role/deptTree/' + roleId,
     method: 'get',
   });
+};
+
+// 查询角色已授权用户列表
+export const allocatedUserList = (query: UserQuery): AxiosPromise<PageResult<UserVO>> => {
+  return request({ url: '/system/role/authUser/allocatedList', method: 'get', params: query });
+};
+
+// 查询角色未授权用户列表
+export const unallocatedUserList = (query: UserQuery): AxiosPromise<PageResult<UserVO>> => {
+  return request({ url: '/system/role/authUser/unallocatedList', method: 'get', params: query });
+};
+
+// 取消用户授权角色
+export const authUserCancel = (data: { userId: string | number; roleId: string | number }) => {
+  return request({ url: '/system/role/authUser/cancel', method: 'put', data });
+};
+
+// 批量取消用户授权角色
+export const authUserCancelAll = (data: { roleId: string | number; userIds: string }) => {
+  return request({ url: '/system/role/authUser/cancelAll', method: 'put', params: data });
+};
+
+// 批量授权用户选择
+export const authUserSelectAll = (data: { roleId: string | number; userIds: string }) => {
+  return request({ url: '/system/role/authUser/selectAll', method: 'put', params: data });
 };
 
 export default { optionSelect, listRole };
