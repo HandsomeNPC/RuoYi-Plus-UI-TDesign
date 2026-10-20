@@ -35,14 +35,22 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>();
 const maxCount = props.limit;
 const fileList = ref<UploadFile[]>([]);
 
-const customUpload = async (file: UploadFile): Promise<RequestMethodResponse> => {
+const customUpload = async (file: UploadFile | UploadFile[]): Promise<RequestMethodResponse> => {
+  // multiple=true 时 TDesign 传 UploadFile[]（逐文件上传也是 [file]）；单文件模式传单个对象。
+  // 统一归一化为数组，取首个文件的 raw 上传，并把 ossId 回填到对应的 UploadFile 对象上。
+  const files = Array.isArray(file) ? file : [file];
+  const target = files[0];
+  const raw = target?.raw as File | undefined;
+  if (!raw) {
+    return { status: 'fail', error: '未获取到文件，请重试', response: {} };
+  }
   const formData = new FormData();
-  formData.append('file', file.raw as File);
+  formData.append('file', raw);
   try {
     const res: any = await uploadOss(formData);
     const data = res?.data;
     if (data?.ossId) {
-      (file as any).ossId = data.ossId;
+      (target as any).ossId = data.ossId;
       emitChange();
       return { status: 'success', response: { url: data.url, ossId: data.ossId, fileName: data.fileName } };
     }

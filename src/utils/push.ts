@@ -92,8 +92,11 @@ const initSsePush = (url: string) => {
   });
   closePushConnection = close;
 
-  const stopErrorWatch = watch(error, () => {
-    console.warn('SSE connection error:', error.value);
+  const stopErrorWatch = watch(error, (err) => {
+    // 跳过 null：重置 error.value 会再次触发本 watcher，避免重复打印“SSE connection error: null”
+    if (!err) return;
+    console.warn('SSE connection error:', err);
+    // 清空以便下一次 error（新的 Event 引用）能再次触发；此赋值引发的 null 回调已被上面 return 拦截
     error.value = null;
   });
 

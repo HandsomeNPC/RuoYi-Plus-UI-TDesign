@@ -271,9 +271,16 @@ const resetQuery = () => {
   handleQuery();
 };
 
-const customUpload = async (file: UploadFile): Promise<RequestMethodResponse> => {
+const customUpload = async (file: UploadFile | UploadFile[]): Promise<RequestMethodResponse> => {
+  // TDesign 在 multiple=true 时，requestMethod 入参是 UploadFile[]（即使按文件逐个上传也是 [file]），
+  // 取首个文件的 raw 作为实际二进制；非 multiple 时入参为单个 UploadFile，统一归一化为数组处理。
+  const files = Array.isArray(file) ? file : [file];
+  const raw = files[0]?.raw as File | undefined;
+  if (!raw) {
+    return { status: 'fail', error: '未获取到文件，请重试', response: {} };
+  }
   const formData = new FormData();
-  formData.append('file', file.raw as File);
+  formData.append('file', raw);
   try {
     const res: any = await uploadOss(formData);
     const data = res?.data;
