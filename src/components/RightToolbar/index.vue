@@ -11,7 +11,12 @@
           <template #icon><refresh-icon /></template>
         </t-button>
       </t-tooltip>
-      <t-popover v-if="colTreeData.length" placement="bottom" trigger="click" width="200">
+      <t-popup
+        v-if="colTreeData.length"
+        overlay-class-name="right-toolbar-col-popup"
+        placement="bottom"
+        trigger="click"
+      >
         <template #content>
           <div class="col-tree-header">显示/隐藏列</div>
           <t-tree
@@ -28,7 +33,7 @@
             <template #icon><setting-icon /></template>
           </t-button>
         </t-tooltip>
-      </t-popover>
+      </t-popup>
     </t-space>
   </div>
 </template>
@@ -143,5 +148,12 @@ onMounted(() => {
   font-size: 12px;
   color: var(--td-text-color-secondary);
   margin-bottom: 8px;
+}
+</style>
+
+<style lang="less">
+// popup 内容需要用非 scoped 样式（t-popup 内容渲染在 body 下）
+.right-toolbar-col-popup .t-popup__content {
+  width: 200px;
 }
 </style>
